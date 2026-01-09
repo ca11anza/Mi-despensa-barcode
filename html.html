@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despensa Inteligente Free</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --primary: #2e7d32; --accent: #4caf50; --bg: #f1f8e9; --danger: #c62828; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
+        
+        .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .view { display: none; padding: 15px; animation: slideIn 0.3s ease-out; }
+        .view.active { display: block; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .product-img-thumb { width: 100%; height: 160px; object-fit: contain; background: #fff; border-radius: 10px; cursor: pointer; border: 1px solid #eee; }
+        
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9rem; color: #333; }
+        input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        
+        .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; font-weight: bold; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .btn-scan { background: #1565c0; color: white; border: none; padding: 10px 20px; border-radius: 8px; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; z-index: 100; padding-top: 5px; }
+        .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        .nav-item i { font-size: 1.4rem; margin-bottom: 4px; }
+
+        #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 200; }
+        #api-loading { display: none; color: var(--primary); font-weight: bold; text-align: center; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="app-bar">📦 Mi Despensa Inteligente</div>
+
+    <!-- VISTA: BODEGA -->
+    <section id="view-home" class="view active">
+        <h3 style="margin-top:0;">En Despensa</h3>
+        <div id="inventory-list"></div>
+    </section>
+
+    <!-- VISTA: DETALLE -->
+    <section id="view-detail" class="view">
+        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; margin-bottom:15px; padding:0;">
+            <i class="fas fa-arrow-left"></i> VOLVER A BODEGA
+        </button>
+        <div id="detail-content" class="card"></div>
+    </section>
+
+    <!-- VISTA: AGREGAR -->
+    <section id="view-add" class="view">
+        <div class="card">
+            <h3>Nueva Compra</h3>
+            
+            <label>Escanear Código</label>
+            <div style="display: flex; gap: 8px; margin-top: 5px;">
+                <input type="text" id="barcode" placeholder="Código de barras">
+                <button class="btn-scan" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
+            </div>
+            <div id="api-loading"><i class="fas fa-spinner fa-spin"></i> Buscando en Open Food Facts...</div>
+
+            <label>Nombre del Producto / Notas</label>
+            <textarea id="notes" rows="2" placeholder="Ej: Atún en agua 140g"></textarea>
+
+            <label>Fecha de Vencimiento</label>
+            <input type="date" id="expiryDate">
+
+            <label>Foto del Producto (Opcional)</label>
+            <input type="file" id="photo" accept="image/*" capture="environment">
+            <input type="hidden" id="api-photo-url">
+
+            <button class="btn-main" onclick="saveProduct()"><i class="fas fa-check-circle"></i> GUARDAR EN BODEGA</button>
+        </div>
+    </section>
+
+    <!-- VISTA: ALERTAS -->
+    <section id="view-alerts" class="view">
+        <h3>🚨 Próximos a Vencer</h3>
+        <div id="alerts-list"></div>
+    </section>
+
+    <!-- ESCANER FULLSCREEN -->
+    <div id="scanner-container">
+        <div id="reader"></div>
+        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CERRAR CÁMARA</button>
+    </div>
+
+    <!-- NAVEGACIÓN -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="showView('home')"><i class="fas fa-home"></i>Bodega</button>
+        <button class="nav-item" onclick="showView('add')"><i class="fas fa-plus-circle"></i>Agregar</button>
+        <button class="nav-item" onclick="showView('alerts')"><i class="fas fa-bell"></i>Alertas</button>
+    </nav>
+
+    <script>
+        let db;
+        const html5QrCode = new Html5Qrcode("reader");
+
+        // Base de Datos Local
+        const request = indexedDB.open("DespensaDB", 1);
+        request.onupgradeneeded = e => {
+            db = e.target.result;
+            db.createObjectStore("products", { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = e => { db = e.target.result; renderInventory(); };
+
+        function showView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + viewId).classList.add('active');
+            
+            // Lógica de iconos activos
+            const btnIdx = {home:0, add:1, alerts:2};
+            if(viewId in btnIdx) document.querySelectorAll('.nav-item')[btnIdx[viewId]].classList.add('active');
+
+            if(viewId === 'home') renderInventory();
+            if(viewId === 'alerts') checkAlerts();
+        }
+
+        // LÓGICA API OPEN FOOD FACTS (GRATIS)
+        async function fetchProductInfo(barcode) {
+            const loading = document.getElementById('api-loading');
+            loading.style.display = 'block';
+            
+            try {
+                // API Gratuita sin Key
+                const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === 1) {
+                    const product = data.product;
+                    const name = product.product_name || "";
+                    const brand = product.brands || "";
+                    
+                    document.getElementById('notes').value = `${name} ${brand}`.trim();
+                    
+                    // Imagen oficial si existe
+                    if (product.image_url) {
+                        document.getElementById('api-photo-url').value = product.image_url;
+                    }
+                    Swal.fire('¡Encontrado!', name, 'success');
+                } else {
+                    Swal.fire('No encontrado', 'No está en la base de datos libre. Ingresa el nombre manualmente.', 'info');
+                }
+            } catch (error) {
+                console.error("Error API:", error);
+                Swal.fire('Error', 'No se pudo conectar con la base de datos.', 'error');
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // ESCÁNER
+        function startScanner() {
+            document.getElementById('scanner-container').style.display = 'block';
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                text => { 
+                    document.getElementById('barcode').value = text; 
+                    stopScanner(); 
+                    fetchProductInfo(text);
+                }
+            );
+        }
+
+        function stopScanner() {
+            html5QrCode.stop();
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        // GUARDADO
+        async function saveProduct() {
+            const barcode = document.getElementById('barcode').value;
+            const expiryDate = document.getElementById('expiryDate').value;
+            const notes = document.getElementById('notes').value;
+            const apiPhoto = document.getElementById('api-photo-url').value;
+            const fileInput = document.getElementById('photo');
+
+            if (!expiryDate || !notes) return Swal.fire('Atención', 'Nombre y Fecha son obligatorios', 'warning');
+
+            const saveToDB = (photoData) => {
+                const transaction = db.transaction(["products"], "readwrite");
+                transaction.objectStore("products").add({
+                    barcode, notes, expiryDate, photo: photoData,
+                    purchaseDate: new Date().toLocaleDateString()
+                });
+                Swal.fire('Registrado', 'Producto en bodega', 'success');
+                showView('home');
+                // Limpiar
+                document.getElementById('barcode').value = '';
+                document.getElementById('notes').value = '';
+                document.getElementById('api-photo-url').value = '';
+                document.getElementById('photo').value = '';
+            };
+
+            // Prioridad de foto: 1. Manual, 2. API, 3. Placeholder
+            if (fileInput.files.length > 0) {
+                const reader = new FileReader();
+                reader.readAsDataURL(fileInput.files[0]);
+                reader.onload = () => saveToDB(reader.result);
+            } else {
+                saveToDB(apiPhoto || 'https://via.placeholder.com/150?text=Sin+Foto');
+            }
+        }
+
+        // LISTA E INVENTARIO
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = "";
+            db.transaction("products").objectStore("products").openCursor().onsuccess = e => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const p = cursor.value;
+                    list.innerHTML += `
+                        <div class="card" onclick="openDetail(${p.id})">
+                            <div style="display:flex; gap:15px; align-items:center;">
+                                <img src="${p.photo}" style="width:60px; height:60px; object-fit:cover; border-radius:8px;">
+                                <div>
+                                    <strong style="font-size:1.1rem;">${p.notes}</strong><br>
+                                    <small style="color:#666;">📅 Vence: ${p.expiryDate}</small>
+                                </div>
+                            </div>
+                        </div>`;
+                    cursor.continue();
+                }
+            };
+        }
+
+        function openDetail(id) {
+            db.transaction("products").objectStore("products").get(id).onsuccess = e => {
+                const p = e.target.result;
+                document.getElementById('detail-content').innerHTML = `
+                    <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:250px; object-fit:contain;">
+                    <h2 style="margin:15px 0 5px 0;">${p.notes}</h2>
+                    <hr border="0" style="border-top:1px solid #eee">
+                    <p><b>Barcode:</b> ${p.barcode || 'N/A'}</p>
+                    <p><b>Fecha de Compra:</b> ${p.purchaseDate}</p>
+                    <p style="color:var(--danger); font-size:1.2rem;"><b>Vence:</b> ${p.expiryDate}</p>
+                    <button class="btn-main" style="background:var(--danger)" onclick="deleteProduct(${p.id})">
+                        <i class="fas fa-trash-alt"></i> DESECHAR / CONSUMIDO
+                    </button>
+                `;
+                showView('detail');
+            };
+        }
+
+        function deleteProduct(id) {
+            Swal.fire({
+                title: '¿Eliminar del inventario?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, borrar',
+                confirmButtonColor: '#c62828'
+            }).then(res => {
+                if(res.isConfirmed) {
+                    db.transaction(["products"], "readwrite").objectStore("products").delete(id);
+                    showView('home');
+                }
+            });
+        }
+
+        function checkAlerts() {
+            const list = document.getElementById('alerts-list');
+            list.innerHTML = "";
+            const today = new Date();
+            db.transaction("products").objectStore("products").openCursor().onsuccess = e => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const p = cursor.value;
+                    const diff = (new Date(p.expiryDate) - today) / (1000*60*60*24);
+                    if (diff <= 3) {
+                        list.innerHTML += `
+                            <div class="card" style="border-left: 6px solid ${diff < 0 ? 'red' : 'orange'}" onclick="openDetail(${p.id})">
+                                <b style="color:${diff < 0 ? 'red' : 'orange'}">${diff < 0 ? '🚨 VENCIDO' : '⏳ POR VENCER (3 DÍAS)'}</b><br>
+                                ${p.notes}
+                            </div>`;
+                    }
+                    cursor.continue();
+                }
+            };
+        }
+    </script>
+</body>
+</html>
