@@ -3,95 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Inteligente Free</title>
+    <title>Despensa con Memoria</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --primary: #2e7d32; --accent: #4caf50; --bg: #f1f8e9; --danger: #c62828; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
-        
-        .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .view { display: none; padding: 15px; animation: slideIn 0.3s ease-out; }
+        :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; }
+        body { font-family: sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
+        .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; }
+        .view { display: none; padding: 15px; }
         .view.active { display: block; }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        .card { background: white; border-radius: 15px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .product-img-thumb { width: 100%; height: 160px; object-fit: contain; background: #fff; border-radius: 10px; cursor: pointer; border: 1px solid #eee; }
-        
-        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9rem; color: #333; }
-        input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
-        
-        .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; font-weight: bold; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .btn-scan { background: #1565c0; color: white; border: none; padding: 10px 20px; border-radius: 8px; }
-
-        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; z-index: 100; padding-top: 5px; }
-        .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; }
         .nav-item.active { color: var(--primary); font-weight: bold; }
-        .nav-item i { font-size: 1.4rem; margin-bottom: 4px; }
-
-        #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 200; }
-        #api-loading { display: none; color: var(--primary); font-weight: bold; text-align: center; margin: 10px 0; }
+        #api-loading { display: none; color: orange; font-weight: bold; margin: 10px 0; }
+        .thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; }
+        .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; }
     </style>
 </head>
 <body>
 
     <div class="app-bar">📦 Mi Despensa Inteligente</div>
 
-    <!-- VISTA: BODEGA -->
     <section id="view-home" class="view active">
-        <h3 style="margin-top:0;">En Despensa</h3>
+        <h3>Mi Bodega</h3>
         <div id="inventory-list"></div>
     </section>
 
-    <!-- VISTA: DETALLE -->
-    <section id="view-detail" class="view">
-        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; margin-bottom:15px; padding:0;">
-            <i class="fas fa-arrow-left"></i> VOLVER A BODEGA
-        </button>
-        <div id="detail-content" class="card"></div>
-    </section>
-
-    <!-- VISTA: AGREGAR -->
     <section id="view-add" class="view">
         <div class="card">
-            <h3>Nueva Compra</h3>
-            
-            <label>Escanear Código</label>
-            <div style="display: flex; gap: 8px; margin-top: 5px;">
+            <h3>Registrar Producto</h3>
+            <label>Escanear</label>
+            <div style="display: flex; gap: 10px;">
                 <input type="text" id="barcode" placeholder="Código de barras">
-                <button class="btn-scan" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
+                <button onclick="startScanner()" style="padding:10px; background:#1565c0; color:white; border:none; border-radius:8px;"><i class="fas fa-barcode"></i></button>
             </div>
-            <div id="api-loading"><i class="fas fa-spinner fa-spin"></i> Buscando en Open Food Facts...</div>
+            
+            <div id="api-loading"><i class="fas fa-brain"></i> Consultando memoria y nube...</div>
 
-            <label>Nombre del Producto / Notas</label>
-            <textarea id="notes" rows="2" placeholder="Ej: Atún en agua 140g"></textarea>
+            <label style="display:block; margin-top:15px;">Nombre del Producto</label>
+            <input type="text" id="notes" placeholder="Nombre del producto">
 
-            <label>Fecha de Vencimiento</label>
+            <label style="display:block; margin-top:15px;">Fecha de Vencimiento</label>
             <input type="date" id="expiryDate">
 
-            <label>Foto del Producto (Opcional)</label>
-            <input type="file" id="photo" accept="image/*" capture="environment">
-            <input type="hidden" id="api-photo-url">
-
-            <button class="btn-main" onclick="saveProduct()"><i class="fas fa-check-circle"></i> GUARDAR EN BODEGA</button>
+            <label style="display:block; margin-top:15px;">Foto (Si no aparece una, toma una nueva)</label>
+            <div id="photo-preview-container" style="text-align: center; margin-top: 5px;">
+                <img id="current-photo-preview" src="https://via.placeholder.com/150?text=Sin+Foto" style="width:120px; border-radius:10px; border:1px solid #ddd;">
+            </div>
+            <input type="file" id="photo-input" accept="image/*" capture="environment" style="margin-top:10px;">
+            
+            <button class="btn-main" onclick="saveProduct()">GUARDAR EN BODEGA</button>
         </div>
     </section>
 
-    <!-- VISTA: ALERTAS -->
     <section id="view-alerts" class="view">
-        <h3>🚨 Próximos a Vencer</h3>
+        <h3>Alertas</h3>
         <div id="alerts-list"></div>
     </section>
 
-    <!-- ESCANER FULLSCREEN -->
-    <div id="scanner-container">
+    <section id="view-detail" class="view">
+        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold;"><i class="fas fa-arrow-left"></i> VOLVER</button>
+        <div id="detail-content" class="card" style="margin-top:10px;"></div>
+    </section>
+
+    <div id="scanner-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:black; z-index:200;">
         <div id="reader"></div>
-        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CERRAR CÁMARA</button>
+        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none;">CERRAR</button>
     </div>
 
-    <!-- NAVEGACIÓN -->
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="showView('home')"><i class="fas fa-home"></i>Bodega</button>
         <button class="nav-item" onclick="showView('add')"><i class="fas fa-plus-circle"></i>Agregar</button>
@@ -102,11 +84,12 @@
         let db;
         const html5QrCode = new Html5Qrcode("reader");
 
-        // Base de Datos Local
-        const request = indexedDB.open("DespensaDB", 1);
+        // Base de datos con dos tablas: 'inventory' y 'product_master' (la memoria)
+        const request = indexedDB.open("DespensaSmartDB", 3);
         request.onupgradeneeded = e => {
             db = e.target.result;
-            db.createObjectStore("products", { keyPath: "id", autoIncrement: true });
+            if(!db.objectStoreNames.contains("inventory")) db.createObjectStore("inventory", { keyPath: "id", autoIncrement: true });
+            if(!db.objectStoreNames.contains("product_master")) db.createObjectStore("product_master", { keyPath: "barcode" });
         };
         request.onsuccess = e => { db = e.target.result; renderInventory(); };
 
@@ -114,117 +97,96 @@
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
             document.getElementById('view-' + viewId).classList.add('active');
-            
-            // Lógica de iconos activos
-            const btnIdx = {home:0, add:1, alerts:2};
-            if(viewId in btnIdx) document.querySelectorAll('.nav-item')[btnIdx[viewId]].classList.add('active');
-
             if(viewId === 'home') renderInventory();
             if(viewId === 'alerts') checkAlerts();
         }
 
-        // LÓGICA API OPEN FOOD FACTS (GRATIS)
         async function fetchProductInfo(barcode) {
             const loading = document.getElementById('api-loading');
             loading.style.display = 'block';
             
-            try {
-                // API Gratuita sin Key
-                const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
-                const response = await fetch(url);
-                const data = await response.json();
+            // 1. BUSCAR EN MEMORIA LOCAL PRIMERO
+            const tx = db.transaction("product_master", "readonly");
+            const store = tx.objectStore("product_master");
+            const localData = await new Promise(res => {
+                const req = store.get(barcode);
+                req.onsuccess = () => res(req.result);
+            });
 
-                if (data.status === 1) {
-                    const product = data.product;
-                    const name = product.product_name || "";
-                    const brand = product.brands || "";
-                    
-                    document.getElementById('notes').value = `${name} ${brand}`.trim();
-                    
-                    // Imagen oficial si existe
-                    if (product.image_url) {
-                        document.getElementById('api-photo-url').value = product.image_url;
-                    }
-                    Swal.fire('¡Encontrado!', name, 'success');
-                } else {
-                    Swal.fire('No encontrado', 'No está en la base de datos libre. Ingresa el nombre manualmente.', 'info');
-                }
-            } catch (error) {
-                console.error("Error API:", error);
-                Swal.fire('Error', 'No se pudo conectar con la base de datos.', 'error');
-            } finally {
+            if (localData) {
+                document.getElementById('notes').value = localData.name;
+                document.getElementById('current-photo-preview').src = localData.photo;
                 loading.style.display = 'none';
+                Swal.fire('Desde Memoria', 'Producto reconocido localmente', 'success');
+                return;
             }
-        }
 
-        // ESCÁNER
-        function startScanner() {
-            document.getElementById('scanner-container').style.display = 'block';
-            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
-                text => { 
-                    document.getElementById('barcode').value = text; 
-                    stopScanner(); 
-                    fetchProductInfo(text);
+            // 2. SI NO ESTÁ EN MEMORIA, BUSCAR EN API GRATUITA
+            try {
+                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+                const data = await res.json();
+                if (data.status === 1) {
+                    const p = data.product;
+                    document.getElementById('notes').value = p.product_name || "";
+                    if(p.image_url) document.getElementById('current-photo-preview').src = p.image_url;
                 }
-            );
+            } catch (e) { console.log("Error API"); }
+            
+            loading.style.display = 'none';
         }
 
-        function stopScanner() {
-            html5QrCode.stop();
-            document.getElementById('scanner-container').style.display = 'none';
-        }
-
-        // GUARDADO
-        async function saveProduct() {
+        function saveProduct() {
             const barcode = document.getElementById('barcode').value;
-            const expiryDate = document.getElementById('expiryDate').value;
-            const notes = document.getElementById('notes').value;
-            const apiPhoto = document.getElementById('api-photo-url').value;
-            const fileInput = document.getElementById('photo');
+            const name = document.getElementById('notes').value;
+            const expiry = document.getElementById('expiryDate').value;
+            const photoInput = document.getElementById('photo-input');
+            const currentPreview = document.getElementById('current-photo-preview').src;
 
-            if (!expiryDate || !notes) return Swal.fire('Atención', 'Nombre y Fecha son obligatorios', 'warning');
+            if(!name || !expiry) return Swal.fire('Error', 'Nombre y Fecha son obligatorios', 'error');
 
-            const saveToDB = (photoData) => {
-                const transaction = db.transaction(["products"], "readwrite");
-                transaction.objectStore("products").add({
-                    barcode, notes, expiryDate, photo: photoData,
-                    purchaseDate: new Date().toLocaleDateString()
+            const processSave = (finalPhoto) => {
+                const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                
+                // Guardar en inventario actual
+                tx.objectStore("inventory").add({
+                    barcode, name, expiry, photo: finalPhoto, date: new Date().toLocaleDateString()
                 });
-                Swal.fire('Registrado', 'Producto en bodega', 'success');
+
+                // GUARDAR EN MEMORIA (Master) para la próxima vez
+                tx.objectStore("product_master").put({
+                    barcode, name, photo: finalPhoto
+                });
+
+                Swal.fire('Guardado', 'Producto registrado y aprendido', 'success');
                 showView('home');
-                // Limpiar
+                // Limpiar formulario
                 document.getElementById('barcode').value = '';
                 document.getElementById('notes').value = '';
-                document.getElementById('api-photo-url').value = '';
-                document.getElementById('photo').value = '';
+                document.getElementById('current-photo-preview').src = 'https://via.placeholder.com/150?text=Sin+Foto';
             };
 
-            // Prioridad de foto: 1. Manual, 2. API, 3. Placeholder
-            if (fileInput.files.length > 0) {
+            if (photoInput.files.length > 0) {
                 const reader = new FileReader();
-                reader.readAsDataURL(fileInput.files[0]);
-                reader.onload = () => saveToDB(reader.result);
+                reader.readAsDataURL(photoInput.files[0]);
+                reader.onload = () => processSave(reader.result);
             } else {
-                saveToDB(apiPhoto || 'https://via.placeholder.com/150?text=Sin+Foto');
+                processSave(currentPreview);
             }
         }
 
-        // LISTA E INVENTARIO
+        // --- Funciones de Renderizado (Igual que antes pero con la nueva tabla) ---
         function renderInventory() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = "";
-            db.transaction("products").objectStore("products").openCursor().onsuccess = e => {
+            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const cursor = e.target.result;
                 if (cursor) {
                     const p = cursor.value;
                     list.innerHTML += `
                         <div class="card" onclick="openDetail(${p.id})">
-                            <div style="display:flex; gap:15px; align-items:center;">
-                                <img src="${p.photo}" style="width:60px; height:60px; object-fit:cover; border-radius:8px;">
-                                <div>
-                                    <strong style="font-size:1.1rem;">${p.notes}</strong><br>
-                                    <small style="color:#666;">📅 Vence: ${p.expiryDate}</small>
-                                </div>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <img src="${p.photo}" class="thumb">
+                                <div><strong>${p.name}</strong><br><small>Vence: ${p.expiry}</small></div>
                             </div>
                         </div>`;
                     cursor.continue();
@@ -233,58 +195,47 @@
         }
 
         function openDetail(id) {
-            db.transaction("products").objectStore("products").get(id).onsuccess = e => {
+            db.transaction("inventory").objectStore("inventory").get(id).onsuccess = e => {
                 const p = e.target.result;
                 document.getElementById('detail-content').innerHTML = `
-                    <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:250px; object-fit:contain;">
-                    <h2 style="margin:15px 0 5px 0;">${p.notes}</h2>
-                    <hr border="0" style="border-top:1px solid #eee">
-                    <p><b>Barcode:</b> ${p.barcode || 'N/A'}</p>
-                    <p><b>Fecha de Compra:</b> ${p.purchaseDate}</p>
-                    <p style="color:var(--danger); font-size:1.2rem;"><b>Vence:</b> ${p.expiryDate}</p>
-                    <button class="btn-main" style="background:var(--danger)" onclick="deleteProduct(${p.id})">
-                        <i class="fas fa-trash-alt"></i> DESECHAR / CONSUMIDO
-                    </button>
+                    <img src="${p.photo}" style="width:100%; border-radius:10px;">
+                    <h2>${p.name}</h2>
+                    <p><b>Código:</b> ${p.barcode}</p>
+                    <p><b>Vence:</b> ${p.expiry}</p>
+                    <button class="btn-main" style="background:var(--danger)" onclick="deleteItem(${p.id})">ELIMINAR PRODUCTO</button>
                 `;
                 showView('detail');
             };
         }
 
-        function deleteProduct(id) {
-            Swal.fire({
-                title: '¿Eliminar del inventario?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, borrar',
-                confirmButtonColor: '#c62828'
-            }).then(res => {
-                if(res.isConfirmed) {
-                    db.transaction(["products"], "readwrite").objectStore("products").delete(id);
-                    showView('home');
-                }
-            });
+        function deleteItem(id) {
+            db.transaction("inventory", "readwrite").objectStore("inventory").delete(id);
+            showView('home');
         }
 
         function checkAlerts() {
-            const list = document.getElementById('alerts-list');
-            list.innerHTML = "";
+            const list = document.getElementById('alerts-list'); list.innerHTML = "";
             const today = new Date();
-            db.transaction("products").objectStore("products").openCursor().onsuccess = e => {
+            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const cursor = e.target.result;
                 if (cursor) {
                     const p = cursor.value;
-                    const diff = (new Date(p.expiryDate) - today) / (1000*60*60*24);
+                    const diff = (new Date(p.expiry) - today) / (1000*60*60*24);
                     if (diff <= 3) {
-                        list.innerHTML += `
-                            <div class="card" style="border-left: 6px solid ${diff < 0 ? 'red' : 'orange'}" onclick="openDetail(${p.id})">
-                                <b style="color:${diff < 0 ? 'red' : 'orange'}">${diff < 0 ? '🚨 VENCIDO' : '⏳ POR VENCER (3 DÍAS)'}</b><br>
-                                ${p.notes}
-                            </div>`;
+                        list.innerHTML += `<div class="card" style="border-left:5px solid ${diff<0?'red':'orange'}" onclick="openDetail(${p.id})">
+                            <b>${diff<0?'🚨 VENCIDO':'⏳ POR VENCER'}</b><br>${p.name}</div>`;
                     }
                     cursor.continue();
                 }
             };
         }
+
+        function startScanner() {
+            document.getElementById('scanner-container').style.display='block';
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                text => { document.getElementById('barcode').value = text; stopScanner(); fetchProductInfo(text); });
+        }
+        function stopScanner() { html5QrCode.stop(); document.getElementById('scanner-container').style.display='none'; }
     </script>
 </body>
 </html>
