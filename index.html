@@ -1,113 +1,287 @@
-<!-- Agregamos los botones de Backup en la vista de Bodega -->
-<section id="view-home" class="view active">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin:0;">Mi Inventario</h3>
-        <div style="display: flex; gap: 10px;">
-            <button onclick="exportData()" title="Exportar Copia" style="background:none; border:none; color:var(--primary); font-size:1.2rem;"><i class="fas fa-file-export"></i></button>
-            <button onclick="document.getElementById('import-input').click()" title="Importar Copia" style="background:none; border:none; color:var(--info); font-size:1.2rem;"><i class="fas fa-file-import"></i></button>
-            <input type="file" id="import-input" style="display:none" accept=".json" onchange="importData(event)">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despensa Pro OCR</title>
+    <link rel="manifest" href="manifest.json">
+    <!-- Librerías -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; }
+        body { font-family: sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
+        .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:10; }
+        .view { display: none; padding: 15px; }
+        .view.active { display: block; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* Botones */
+        .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; font-weight: bold; }
+        .btn-ocr { background: var(--info); color: white; border: none; padding: 10px; border-radius: 8px; font-size: 0.9rem; }
+        .btn-scan-barcode { background: #1565c0; color: white; border: none; padding: 10px; border-radius: 8px; }
+        
+        /* Previsualización */
+        #current-photo-preview { width: 100%; max-height: 180px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; }
+        #ocr-status { display: none; font-size: 0.8rem; color: var(--info); font-weight: bold; margin-top: 5px; text-align: center; }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; }
+        .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        
+        input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        label { display: block; margin-top: 12px; font-weight: bold; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+
+    <div class="app-bar">📦 Gestor de Despensa IA</div>
+
+    <!-- BODEGA -->
+    <section id="view-home" class="view active">
+        <h3 style="margin-top:0;">Mi Inventario</h3>
+        <div id="inventory-list"></div>
+    </section>
+
+    <!-- AGREGAR -->
+    <section id="view-add" class="view">
+        <div class="card">
+            <h3 style="margin-top:0;">Registrar Compra</h3>
+            
+            <label>Código de Barras</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="barcode" placeholder="Escanear...">
+                <button class="btn-scan-barcode" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
+            </div>
+
+            <label>Foto del Producto *</label>
+            <img id="current-photo-preview" src="">
+            <input type="file" id="photo-input" accept="image/*" capture="environment" style="margin-top:10px;">
+
+            <label>Fecha de Vencimiento *</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="date" id="expiryDate">
+                <button class="btn-ocr" onclick="document.getElementById('ocr-input').click()"><i class="fas fa-robot"></i> Leer</button>
+            </div>
+            <!-- Input oculto para la foto del OCR -->
+            <input type="file" id="ocr-input" accept="image/*" capture="environment" style="display: none;">
+            <div id="ocr-status"><i class="fas fa-spinner fa-spin"></i> Analizando fecha...</div>
+
+            <label>Nombre del Producto *</label>
+            <input type="text" id="notes" placeholder="Ej: Leche 1L">
+            
+            <button class="btn-main" onclick="saveProduct()">GUARDAR EN BODEGA</button>
         </div>
+    </section>
+
+    <!-- ALERTAS -->
+    <section id="view-alerts" class="view">
+        <h3>🚨 Próximos a Vencer</h3>
+        <div id="alerts-list"></div>
+    </section>
+
+    <!-- DETALLE -->
+    <section id="view-detail" class="view">
+        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> VOLVER</button>
+        <div id="detail-content" class="card"></div>
+    </section>
+
+    <!-- ESCANER DE BARRAS -->
+    <div id="scanner-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:black; z-index:200;">
+        <div id="reader"></div>
+        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CANCELAR</button>
     </div>
-    <div id="inventory-list" style="margin-top:15px;"></div>
-</section>
 
-<script>
-    // --- NUEVA FUNCIÓN: EXPORTAR DATOS ---
-    function exportData() {
-        const transaction = db.transaction(["inventory", "product_master"], "readonly");
-        const data = {};
-        
-        const store1 = transaction.objectStore("inventory");
-        const store2 = transaction.objectStore("product_master");
-        
-        const req1 = store1.getAll();
-        req1.onsuccess = () => {
-            data.inventory = req1.result;
-            const req2 = store2.getAll();
-            req2.onsuccess = () => {
-                data.product_master = req2.result;
-                
-                // Crear archivo descargable
-                const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `despensa_backup_${new Date().toLocaleDateString()}.json`;
-                a.click();
-                Swal.fire('Copia Creada', 'Guarda este archivo en un lugar seguro', 'success');
+    <!-- MENU -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="showView('home')"><i class="fas fa-warehouse"></i>Bodega</button>
+        <button class="nav-item" onclick="showView('add')"><i class="fas fa-plus-circle"></i>Agregar</button>
+        <button class="nav-item" onclick="showView('alerts')"><i class="fas fa-bell"></i>Alertas</button>
+    </nav>
+
+    <script>
+        let db;
+        const html5QrCode = new Html5Qrcode("reader");
+        const PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+        document.getElementById('current-photo-preview').src = PLACEHOLDER;
+
+        // --- LÓGICA FOTO DEL PRODUCTO (COMO ESTABA) ---
+        document.getElementById('photo-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => document.getElementById('current-photo-preview').src = e.target.result;
+                reader.readAsDataURL(file);
             }
-        };
-    }
+        });
 
-    // --- NUEVA FUNCIÓN: IMPORTAR DATOS ---
-    function importData(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                const tx = db.transaction(["inventory", "product_master"], "readwrite");
-                
-                if (data.inventory) {
-                    data.inventory.forEach(item => {
-                        delete item.id; // Evitar conflictos de ID
-                        tx.objectStore("inventory").add(item);
-                    });
-                }
-                
-                if (data.product_master) {
-                    data.product_master.forEach(item => {
-                        tx.objectStore("product_master").put(item);
-                    });
-                }
-
-                tx.oncomplete = () => {
-                    Swal.fire('Importación Exitosa', 'Tu inventario se ha actualizado', 'success');
-                    renderInventory();
+        // --- LÓGICA OCR FECHA (NUEVA FOTO INDEPENDIENTE) ---
+        document.getElementById('ocr-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    const status = document.getElementById('ocr-status');
+                    status.style.display = 'block';
+                    try {
+                        const result = await Tesseract.recognize(event.target.result, 'eng+spa');
+                        const detectedDate = parseDateFromText(result.data.text);
+                        if (detectedDate) {
+                            document.getElementById('expiryDate').value = detectedDate;
+                            Swal.fire('¡Fecha Detectada!', detectedDate, 'success');
+                        } else {
+                            Swal.fire('No detectado', 'No pudimos leer la fecha. Inténtalo manualmente.', 'info');
+                        }
+                    } catch (err) {
+                        Swal.fire('Error', 'Hubo un problema con el reconocimiento.', 'error');
+                    }
+                    status.style.display = 'none';
                 };
-            } catch (err) {
-                Swal.fire('Error', 'El archivo no es válido', 'error');
+                reader.readAsDataURL(file);
             }
-        };
-        reader.readAsText(file);
-    }
+        });
 
-    // --- MEJORA EN EL BUSCADOR DE FECHAS (OCR) ---
-    // Agregamos detección de meses por nombre (ENE, FEB, etc)
-    function parseDateFromText(text) {
-        text = text.toUpperCase();
-        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC",
-                        "ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
-        
-        // Primero intentamos la búsqueda numérica normal que ya teníamos
-        const regexes = [
-            /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/,
-            /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/,
-            /\b(\d{2})[\/\-. ](\d{4})\b/
-        ];
-
-        for (let reg of regexes) {
-            const match = text.match(reg);
-            if (match) {
-                if (match.length === 3) return `${match[2].length === 2 ? "20"+match[2] : match[2]}-${match[1]}-01`;
-                if (match.length === 4) return `${match[3].length === 2 ? "20"+match[3] : match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-            }
-        }
-
-        // Búsqueda por nombre de mes (ej: 15 OCT 2026)
-        for (let i = 0; i < months.length; i++) {
-            if (text.includes(months[i])) {
-                const monthNum = (i % 12 + 1).toString().padStart(2, '0');
-                const yearMatch = text.match(/\b(20\d{2}|\d{2})\b/g);
-                if (yearMatch) {
-                    const year = yearMatch[yearMatch.length - 1];
-                    const finalYear = year.length === 2 ? "20" + year : year;
-                    return `${finalYear}-${monthNum}-01`;
+        function parseDateFromText(text) {
+            const regexes = [
+                /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/, // 25/12/2026
+                /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/,   // 25/12/26
+                /\b(\d{2})[\/\-. ](\d{4})\b/                  // 12/2026
+            ];
+            for (let reg of regexes) {
+                const match = text.match(reg);
+                if (match) {
+                    if (match.length === 3) return `${match[2].length === 2 ? "20"+match[2] : match[2]}-${match[1]}-01`;
+                    if (match.length === 4) return `${match[3].length === 2 ? "20"+match[3] : match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
                 }
             }
+            return null;
         }
-        return null;
-    }
-</script>
+
+        // --- BASE DE DATOS Y FUNCIONES ---
+        const request = indexedDB.open("DespensaSmartDB", 3);
+        request.onsuccess = e => { db = e.target.result; renderInventory(); };
+
+        function saveProduct() {
+            const barcode = document.getElementById('barcode').value;
+            const name = document.getElementById('notes').value;
+            const expiry = document.getElementById('expiryDate').value;
+            const photo = document.getElementById('current-photo-preview').src;
+
+            if (!name || !expiry || photo === PLACEHOLDER) {
+                return Swal.fire('Error', 'Faltan campos obligatorios (Nombre, Fecha o Foto)', 'error');
+            }
+
+            const tx = db.transaction(["inventory", "product_master"], "readwrite");
+            tx.objectStore("inventory").add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
+            tx.objectStore("product_master").put({ barcode, name, photo });
+
+            tx.oncomplete = () => {
+                Swal.fire('¡Éxito!', 'Producto registrado', 'success');
+                limpiar();
+                showView('home');
+            };
+        }
+
+        function limpiar() {
+            document.getElementById('barcode').value = '';
+            document.getElementById('notes').value = '';
+            document.getElementById('expiryDate').value = '';
+            document.getElementById('current-photo-preview').src = PLACEHOLDER;
+            document.getElementById('photo-input').value = '';
+            document.getElementById('ocr-input').value = '';
+        }
+
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = "";
+            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
+                const c = e.target.result;
+                if (c) {
+                    list.innerHTML += `
+                        <div class="card" onclick="openDetail(${c.value.id})">
+                            <div style="display:flex; gap:12px; align-items:center;">
+                                <img src="${c.value.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
+                                <div><strong>${c.value.name}</strong><br><small>📅 Vence: ${c.value.expiry}</small></div>
+                            </div>
+                        </div>`;
+                    c.continue();
+                }
+            };
+        }
+
+        async function fetchProductInfo(barcode) {
+            const tx = db.transaction("product_master", "readonly");
+            const store = tx.objectStore("product_master");
+            const local = await new Promise(r => { const g = store.get(barcode); g.onsuccess = () => r(g.result); });
+
+            if (local) {
+                document.getElementById('notes').value = local.name;
+                document.getElementById('current-photo-preview').src = local.photo;
+                return;
+            }
+
+            try {
+                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+                const data = await res.json();
+                if (data.status === 1) {
+                    document.getElementById('notes').value = data.product.product_name || "";
+                    if(data.product.image_url) document.getElementById('current-photo-preview').src = data.product.image_url;
+                }
+            } catch(e) {}
+        }
+
+        function showView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + viewId).classList.add('active');
+            if(viewId === 'home') renderInventory();
+            if(viewId === 'alerts') checkAlerts();
+        }
+
+        function openDetail(id) {
+            db.transaction("inventory").objectStore("inventory").get(id).onsuccess = e => {
+                const p = e.target.result;
+                document.getElementById('detail-content').innerHTML = `
+                    <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:250px; object-fit:contain;">
+                    <h2>${p.name}</h2>
+                    <p style="color:var(--danger); font-size:1.2rem;"><b>Vence:</b> ${p.expiry}</p>
+                    <button class="btn-main" style="background:var(--danger)" onclick="deleteItem(${p.id})">🗑️ DESECHAR</button>
+                `;
+                showView('detail');
+            };
+        }
+
+        function deleteItem(id) {
+            db.transaction("inventory", "readwrite").objectStore("inventory").delete(id);
+            showView('home');
+        }
+
+        function checkAlerts() {
+            const list = document.getElementById('alerts-list'); list.innerHTML = "";
+            const today = new Date();
+            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
+                const c = e.target.result;
+                if (c) {
+                    const diff = (new Date(c.value.expiry) - today) / (1000*60*60*24);
+                    if (diff <= 3) {
+                        list.innerHTML += `<div class="card" onclick="openDetail(${c.value.id})" style="border-left:6px solid ${diff<0?'red':'orange'}">
+                            <b>${diff<0?'🚨 VENCIDO':'⏳ POR VENCER'}</b><br>${c.value.name} (${c.value.expiry})</div>`;
+                    }
+                    c.continue();
+                }
+            };
+        }
+
+        function startScanner() {
+            document.getElementById('scanner-container').style.display='block';
+            html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
+                t => { document.getElementById('barcode').value = t; stopScanner(); fetchProductInfo(t); });
+        }
+        function stopScanner() { html5QrCode.stop(); document.getElementById('scanner-container').style.display='none'; }
+    </script>
+</body>
+</html>
