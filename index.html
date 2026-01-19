@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
-        :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; }
+        :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; --warning-5d: #fdd835; --warning-3d: #fb8c00; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
         .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
@@ -27,6 +27,13 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
+        /* Estilos de Alertas Solicitados */
+        .alert-item { cursor: pointer; transition: transform 0.1s; border-radius: 12px; }
+        .alert-item:active { transform: scale(0.98); }
+        .alert-vencido { border-left: 8px solid var(--danger) !important; background: #ffebee !important; } /* Rojo */
+        .alert-3dias { border-left: 8px solid var(--warning-3d) !important; background: #fff3e0 !important; }   /* Naranja */
+        .alert-5dias { border-left: 8px solid var(--warning-5d) !important; background: #fffde7 !important; }   /* Amarillo */
+
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; z-index: 100; }
         .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; cursor: pointer; }
         .nav-item.active { color: var(--primary); font-weight: bold; }
@@ -44,19 +51,19 @@
     <div class="app-bar">
         <span>📦 Mi Despensa Pro</span>
         <div style="display: flex; gap: 15px;">
-            <i class="fas fa-file-export" onclick="exportData()" style="cursor:pointer;"></i>
-            <i class="fas fa-file-import" onclick="document.getElementById('import-input').click()" style="cursor:pointer;"></i>
+            <i class="fas fa-file-export" onclick="exportData()" title="Exportar Backup"></i>
+            <i class="fas fa-file-import" onclick="document.getElementById('import-input').click()" title="Importar Backup"></i>
             <input type="file" id="import-input" style="display:none" accept=".json" onchange="importData(event)">
         </div>
     </div>
 
-    <!-- BODEGA -->
+    <!-- VISTA: BODEGA -->
     <section id="view-home" class="view active">
         <h3 style="margin-top:0;">Mi Inventario</h3>
         <div id="inventory-list"></div>
     </section>
 
-    <!-- AGREGAR -->
+    <!-- VISTA: AGREGAR -->
     <section id="view-add" class="view">
         <div class="card">
             <h3 style="margin-top:0;">Registrar Compra</h3>
@@ -86,13 +93,13 @@
         </div>
     </section>
 
-    <!-- ALERTAS -->
+    <!-- VISTA: ALERTAS -->
     <section id="view-alerts" class="view">
         <h3>🚨 Alertas de Vencimiento</h3>
         <div id="alerts-list"></div>
     </section>
 
-    <!-- DETALLE -->
+    <!-- VISTA: DETALLE -->
     <section id="view-detail" class="view">
         <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> VOLVER</button>
         <div id="detail-content" class="card"></div>
@@ -116,40 +123,32 @@
         const html5QrCode = new Html5Qrcode("reader");
         const PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
-        // --- INICIALIZACIÓN ---
         window.onload = () => {
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
             initDB();
         };
 
         function initDB() {
-            const request = indexedDB.open("DespensaSmartDB", 4); // Subimos versión
+            const request = indexedDB.open("DespensaSmartDB", 5); // Versión 5 para aplicar cambios
             request.onupgradeneeded = e => {
                 db = e.target.result;
                 if(!db.objectStoreNames.contains("inventory")) db.createObjectStore("inventory", { keyPath: "id", autoIncrement: true });
                 if(!db.objectStoreNames.contains("product_master")) db.createObjectStore("product_master", { keyPath: "barcode" });
             };
-            request.onsuccess = e => { 
-                db = e.target.result; 
-                renderInventory(); 
-            };
-            request.onerror = () => console.error("Error abriendo DB");
+            request.onsuccess = e => { db = e.target.result; renderInventory(); };
         }
 
-        // --- NAVEGACIÓN ---
         function showView(viewId) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
             document.getElementById('view-' + viewId).classList.add('active');
-            
             const btnIdx = {home: 0, add: 1, alerts: 2};
             if(viewId in btnIdx) document.querySelectorAll('.nav-item')[btnIdx[viewId]].classList.add('active');
-
             if(viewId === 'home') renderInventory();
             if(viewId === 'alerts') checkAlerts();
         }
 
-        // --- LÓGICA DE FOTOS ---
+        // --- MANEJO DE FOTOS ---
         document.getElementById('photo-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -175,9 +174,7 @@
                         } else {
                             Swal.fire('No detectado', 'No se encontró una fecha clara.', 'info');
                         }
-                    } catch (err) {
-                        Swal.fire('Error OCR', 'Error procesando imagen', 'error');
-                    }
+                    } catch (err) { Swal.fire('Error OCR', 'No se pudo procesar', 'error'); }
                     status.style.display = 'none';
                 };
                 reader.readAsDataURL(file);
@@ -204,7 +201,7 @@
             return null;
         }
 
-        // --- FUNCIONES CORE ---
+        // --- CORE LOGIC ---
         function saveProduct() {
             const barcode = document.getElementById('barcode').value;
             const name = document.getElementById('notes').value;
@@ -261,7 +258,7 @@
                 const p = e.target.result;
                 document.getElementById('detail-content').innerHTML = `
                     <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
-                    <h2>${p.name}</h2>
+                    <h2 style="margin:15px 0 5px 0;">${p.name}</h2>
                     <p><b>Código:</b> ${p.barcode || 'N/A'}</p>
                     <p><b>Compra:</b> ${p.date}</p>
                     <p style="color:var(--danger); font-size:1.2rem;"><b>Vencimiento:</b> ${p.expiry}</p>
@@ -272,7 +269,7 @@
         }
 
         function deleteItem(id) {
-            Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', confirmButtonColor: '#d32f2f' }).then(r => {
+            Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí' }).then(r => {
                 if(r.isConfirmed) {
                     db.transaction("inventory", "readwrite").objectStore("inventory").delete(id);
                     showView('home');
@@ -280,23 +277,51 @@
             });
         }
 
+        // --- LÓGICA DE ALERTAS ACTUALIZADA ---
         function checkAlerts() {
-            const list = document.getElementById('alerts-list'); list.innerHTML = "";
+            const list = document.getElementById('alerts-list'); 
+            list.innerHTML = "";
             const today = new Date().setHours(0,0,0,0);
+            
+            if (!db) return;
+
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
-                    const diff = (new Date(c.value.expiry) - today) / (1000*60*60*24);
-                    if (diff <= 3) {
-                        list.innerHTML += `<div class="card" onclick="openDetail(${c.value.id})" style="border-left:6px solid ${diff < 0 ? 'red' : 'orange'}">
-                            <b style="color:${diff < 0 ? 'red' : 'orange'}">${diff < 0 ? '🚨 VENCIDO' : '⏳ POR VENCER'}</b><br>${c.value.name} (${c.value.expiry})</div>`;
+                    const p = c.value;
+                    const expDate = new Date(p.expiry).setHours(0,0,0,0);
+                    const diff = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+
+                    let alertClass = "";
+                    let alertText = "";
+
+                    if (diff < 0) {
+                        alertClass = "alert-vencido";
+                        alertText = "🚨 PRODUCTO VENCIDO";
+                    } else if (diff <= 3) {
+                        alertClass = "alert-3dias";
+                        alertText = "⚠️ VENCE EN 3 DÍAS O MENOS";
+                    } else if (diff <= 5) {
+                        alertClass = "alert-5dias";
+                        alertText = "⏳ VENCE EN 5 DÍAS";
+                    }
+
+                    if (alertClass !== "") {
+                        list.innerHTML += `
+                            <div class="card alert-item ${alertClass}" onclick="openDetail(${p.id})">
+                                <b style="font-size: 0.75rem;">${alertText}</b><br>
+                                <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span><br>
+                                <small>Fecha de vencimiento: ${p.expiry}</small>
+                            </div>`;
                     }
                     c.continue();
+                } else if (list.innerHTML === "") {
+                    list.innerHTML = "<p style='text-align:center; color:#888;'>No hay alertas próximas</p>";
                 }
             };
         }
 
-        // --- EXPORT / IMPORT ---
+        // --- BACKUP ---
         function exportData() {
             const tx = db.transaction(["inventory", "product_master"], "readonly");
             const data = {};
@@ -307,7 +332,7 @@
                     const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
-                    a.download = `despensa_backup.json`;
+                    a.download = `backup_despensa.json`;
                     a.click();
                 };
             };
@@ -322,25 +347,23 @@
                 const tx = db.transaction(["inventory", "product_master"], "readwrite");
                 if(data.inventory) data.inventory.forEach(i => { delete i.id; tx.objectStore("inventory").add(i); });
                 if(data.product_master) data.product_master.forEach(m => tx.objectStore("product_master").put(m));
-                tx.oncomplete = () => { Swal.fire('Importado', '', 'success'); renderInventory(); };
+                tx.oncomplete = () => { Swal.fire('Backup Importado', '', 'success'); renderInventory(); };
             };
             reader.readAsText(file);
         }
 
-        // --- ESCANER ---
+        // --- BARRAS ---
         async function fetchProductInfo(barcode) {
             const tx = db.transaction("product_master", "readonly");
             const local = await new Promise(r => { 
                 const g = tx.objectStore("product_master").get(barcode); 
                 g.onsuccess = () => r(g.result); 
             });
-
             if (local) {
                 document.getElementById('notes').value = local.name;
                 document.getElementById('current-photo-preview').src = local.photo;
                 return;
             }
-
             try {
                 const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
                 const d = await res.json();
