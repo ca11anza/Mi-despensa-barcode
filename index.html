@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Inteligente Pro v5</title>
+    <title>Despensa Pro v6 - Multi-lang</title>
     <link rel="manifest" href="manifest.json">
     <!-- Librerías Externas -->
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -14,7 +14,12 @@
     <style>
         :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; --warning-5d: #fdd835; --warning-3d: #fb8c00; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
-        .app-bar { background: var(--primary); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
+        .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Selector de Idioma */
+        .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
+        .lang-select option { color: black; }
+
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -27,8 +32,7 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
-        /* Alertas */
-        .alert-item { cursor: pointer; transition: transform 0.1s; border-radius: 12px; }
+        .alert-item { cursor: pointer; border-radius: 12px; }
         .alert-vencido { border-left: 8px solid var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left: 8px solid var(--warning-3d) !important; background: #fff3e0 !important; }
         .alert-5dias { border-left: 8px solid var(--warning-5d) !important; background: #fffde7 !important; }
@@ -49,77 +53,181 @@
 <body>
 
     <div class="app-bar">
-        <span>📦 Mi Despensa Pro</span>
+        <select class="lang-select" id="languageSelector" onchange="changeLanguage(this.value)">
+            <option value="es">ES</option>
+            <option value="en">EN</option>
+        </select>
+        <span id="txt-app-title">Mi Despensa Pro</span>
         <div style="display: flex; gap: 15px;">
-            <i class="fas fa-file-export" onclick="exportData()" title="Exportar Backup"></i>
-            <i class="fas fa-file-import" onclick="document.getElementById('import-input').click()" title="Importar Backup"></i>
+            <i class="fas fa-file-export" onclick="exportData()"></i>
+            <i class="fas fa-file-import" onclick="document.getElementById('import-input').click()"></i>
             <input type="file" id="import-input" style="display:none" accept=".json" onchange="importData(event)">
         </div>
     </div>
 
     <section id="view-home" class="view active">
-        <h3 style="margin-top:0;">Mi Inventario</h3>
+        <h3 id="txt-inventory-title">Mi Inventario</h3>
         <div id="inventory-list"></div>
     </section>
 
     <section id="view-add" class="view">
         <div class="card">
-            <h3 style="margin-top:0;">Registrar Compra</h3>
+            <h3 id="txt-add-title">Registrar Compra</h3>
             
-            <label>Código de Barras</label>
+            <label id="lbl-barcode">Código de Barras</label>
             <div style="display: flex; gap: 8px;">
-                <input type="text" id="barcode" placeholder="Escanear...">
+                <input type="text" id="barcode" placeholder="...">
                 <button class="btn-barcode" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
             </div>
-            <div id="api-loading"><i class="fas fa-spinner fa-spin"></i> Buscando en internet...</div>
+            <div id="api-loading">...</div>
 
-            <label>Foto del Producto *</label>
+            <label id="lbl-photo">Foto del Producto *</label>
             <img id="current-photo-preview" src="">
             <input type="file" id="photo-input" accept="image/*" capture="environment" style="margin-top:10px;">
 
-            <label>Fecha de Vencimiento *</label>
+            <label id="lbl-expiry">Fecha de Vencimiento *</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="date" id="expiryDate">
-                <button class="btn-ocr" onclick="document.getElementById('ocr-input').click()"><i class="fas fa-robot"></i> Leer</button>
+                <button class="btn-ocr" onclick="document.getElementById('ocr-input').click()"><i class="fas fa-robot"></i> <span id="txt-read">Leer</span></button>
             </div>
             <input type="file" id="ocr-input" accept="image/*" capture="environment" style="display: none;">
-            <div id="ocr-status"><i class="fas fa-spinner fa-spin"></i> Analizando fecha...</div>
+            <div id="ocr-status">...</div>
 
-            <label>Nombre / Notas *</label>
-            <input type="text" id="notes" placeholder="Ej: Arroz 1kg">
+            <label id="lbl-notes">Nombre / Notas *</label>
+            <input type="text" id="notes" placeholder="...">
             
-            <button class="btn-main" onclick="saveProduct()">GUARDAR EN BODEGA</button>
+            <button class="btn-main" onclick="saveProduct()" id="btn-save">GUARDAR EN BODEGA</button>
         </div>
     </section>
 
     <section id="view-alerts" class="view">
-        <h3>🚨 Alertas de Vencimiento</h3>
+        <h3 id="txt-alerts-title">Alertas de Vencimiento</h3>
         <div id="alerts-list"></div>
     </section>
 
     <section id="view-detail" class="view">
-        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> VOLVER</button>
+        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> <span id="txt-back">VOLVER</span></button>
         <div id="detail-content" class="card"></div>
     </section>
 
     <div id="scanner-container">
         <div id="reader"></div>
-        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CANCELAR</button>
+        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;" id="btn-cancel-scan">CANCELAR</button>
     </div>
 
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="showView('home')"><i class="fas fa-warehouse"></i>Bodega</button>
-        <button class="nav-item" onclick="showView('add')"><i class="fas fa-plus-circle"></i>Agregar</button>
-        <button class="nav-item" onclick="showView('alerts')"><i class="fas fa-bell"></i>Alertas</button>
+        <button class="nav-item active" onclick="showView('home')"><i class="fas fa-warehouse"></i><span id="nav-home">Bodega</span></button>
+        <button class="nav-item" onclick="showView('add')"><i class="fas fa-plus-circle"></i><span id="nav-add">Agregar</span></button>
+        <button class="nav-item" onclick="showView('alerts')"><i class="fas fa-bell"></i><span id="nav-alerts">Alertas</span></button>
     </nav>
 
     <script>
+        // --- DICCIONARIO DE TRADUCCIONES ---
+        const i18n = {
+            es: {
+                appTitle: "Mi Despensa Pro",
+                inventoryTitle: "Mi Inventario",
+                addTitle: "Registrar Compra",
+                barcode: "Código de Barras",
+                photo: "Foto del Producto *",
+                expiry: "Fecha de Vencimiento *",
+                read: "Leer",
+                notes: "Nombre / Notas *",
+                save: "GUARDAR EN BODEGA",
+                alertsTitle: "Alertas de Vencimiento",
+                back: "VOLVER",
+                cancelScan: "CANCELAR",
+                navHome: "Bodega",
+                navAdd: "Agregar",
+                navAlerts: "Alertas",
+                emptyPantry: "Bodega vacía",
+                noAlerts: "No hay alertas próximas",
+                searchApi: "Buscando en internet...",
+                ocrStatus: "Analizando fecha...",
+                success: "¡Éxito!",
+                saved: "Producto registrado",
+                missingData: "Faltan Datos",
+                missingDataTxt: "Asegúrate de poner Nombre, Fecha y tomar una Foto.",
+                deleteConfirm: "¿Eliminar?",
+                confirmBtn: "Sí",
+                expired: "🚨 VENCIDO",
+                expires3: "⚠️ VENCE EN 3 DÍAS",
+                expires5: "⏳ VENCE EN 5 DÍAS",
+                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ DESECHAR" }
+            },
+            en: {
+                appTitle: "My Pantry Pro",
+                inventoryTitle: "My Inventory",
+                addTitle: "Register Purchase",
+                barcode: "Barcode",
+                photo: "Product Photo *",
+                expiry: "Expiry Date *",
+                read: "Scan",
+                notes: "Name / Notes *",
+                save: "SAVE TO PANTRY",
+                alertsTitle: "Expiry Alerts",
+                back: "BACK",
+                cancelScan: "CANCEL",
+                navHome: "Pantry",
+                navAdd: "Add",
+                navAlerts: "Alerts",
+                emptyPantry: "Pantry is empty",
+                noAlerts: "No upcoming alerts",
+                searchApi: "Searching online...",
+                ocrStatus: "Analyzing date...",
+                success: "Success!",
+                saved: "Product registered",
+                missingData: "Missing Data",
+                missingDataTxt: "Please ensure Name, Date and Photo are provided.",
+                deleteConfirm: "Delete?",
+                confirmBtn: "Yes",
+                expired: "🚨 EXPIRED",
+                expires3: "⚠️ EXPIRES IN 3 DAYS",
+                expires5: "⏳ EXPIRES IN 5 DAYS",
+                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ DISCARD" }
+            }
+        };
+
+        let currentLang = localStorage.getItem('pantryLang') || 'es';
+
+        function applyLanguage() {
+            const texts = i18n[currentLang];
+            document.getElementById('txt-app-title').innerText = texts.appTitle;
+            document.getElementById('txt-inventory-title').innerText = texts.inventoryTitle;
+            document.getElementById('txt-add-title').innerText = texts.addTitle;
+            document.getElementById('lbl-barcode').innerText = texts.barcode;
+            document.getElementById('lbl-photo').innerText = texts.photo;
+            document.getElementById('lbl-expiry').innerText = texts.expiry;
+            document.getElementById('txt-read').innerText = texts.read;
+            document.getElementById('lbl-notes').innerText = texts.notes;
+            document.getElementById('btn-save').innerText = texts.save;
+            document.getElementById('txt-alerts-title').innerText = texts.alertsTitle;
+            document.getElementById('txt-back').innerText = texts.back;
+            document.getElementById('btn-cancel-scan').innerText = texts.cancelScan;
+            document.getElementById('nav-home').innerText = texts.navHome;
+            document.getElementById('nav-add').innerText = texts.navAdd;
+            document.getElementById('nav-alerts').innerText = texts.navAlerts;
+            document.getElementById('api-loading').innerText = texts.searchApi;
+            document.getElementById('ocr-status').innerText = texts.ocrStatus;
+            document.getElementById('languageSelector').value = currentLang;
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('pantryLang', lang);
+            applyLanguage();
+            renderInventory();
+            checkAlerts();
+        }
+
+        // --- LÓGICA BASE DE DATOS Y FUNCIONALIDADES ---
         let db;
         const html5QrCode = new Html5Qrcode("reader");
         const PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
         window.onload = () => {
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
+            applyLanguage();
             initDB();
         };
 
@@ -133,14 +241,12 @@
             request.onsuccess = e => { db = e.target.result; renderInventory(); };
         }
 
-        // Lógica de Foto Manual (Corregida)
+        // Lógica de Foto Manual
         document.getElementById('photo-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = ev => {
-                    document.getElementById('current-photo-preview').src = ev.target.result;
-                };
+                reader.onload = ev => document.getElementById('current-photo-preview').src = ev.target.result;
                 reader.readAsDataURL(file);
             }
         });
@@ -158,9 +264,7 @@
                         const detectedDate = parseDateFromText(result.data.text);
                         if (detectedDate) {
                             document.getElementById('expiryDate').value = detectedDate;
-                            Swal.fire('¡Fecha Detectada!', detectedDate, 'success');
-                        } else {
-                            Swal.fire('No detectado', 'No se encontró una fecha clara.', 'info');
+                            Swal.fire(i18n[currentLang].success, detectedDate, 'success');
                         }
                     } catch (err) { console.error(err); }
                     status.style.display = 'none';
@@ -171,11 +275,7 @@
 
         function parseDateFromText(text) {
             text = text.toUpperCase();
-            const regexes = [
-                /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/,
-                /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/,
-                /\b(\d{2})[\/\-. ](\d{4})\b/
-            ];
+            const regexes = [/\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/, /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/, /\b(\d{2})[\/\-. ](\d{4})\b/];
             for (let reg of regexes) {
                 const match = text.match(reg);
                 if (match) {
@@ -190,24 +290,18 @@
         }
 
         async function fetchProductInfo(barcode) {
-            const loading = document.getElementById('api-loading');
-            loading.style.display = 'block';
-            
-            // 1. Memoria Local
+            document.getElementById('api-loading').style.display = 'block';
             const tx = db.transaction("product_master", "readonly");
             const local = await new Promise(r => { 
                 const g = tx.objectStore("product_master").get(barcode); 
                 g.onsuccess = () => r(g.result); 
             });
-
             if (local) {
                 document.getElementById('notes').value = local.name;
                 document.getElementById('current-photo-preview').src = local.photo;
-                loading.style.display = 'none';
+                document.getElementById('api-loading').style.display = 'none';
                 return;
             }
-
-            // 2. Internet
             try {
                 const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
                 const d = await res.json();
@@ -216,7 +310,7 @@
                     if(d.product.image_url) document.getElementById('current-photo-preview').src = d.product.image_url;
                 }
             } catch(e) {}
-            loading.style.display = 'none';
+            document.getElementById('api-loading').style.display = 'none';
         }
 
         function saveProduct() {
@@ -224,18 +318,17 @@
             const name = document.getElementById('notes').value;
             const expiry = document.getElementById('expiryDate').value;
             const photo = document.getElementById('current-photo-preview').src;
+            const texts = i18n[currentLang];
 
-            // Validación mejorada
-            if (!name || !expiry || photo === PLACEHOLDER || photo === "") {
-                return Swal.fire('Faltan Datos', 'Asegúrate de poner Nombre, Fecha y tomar una Foto.', 'warning');
+            if (!name || !expiry || photo === PLACEHOLDER) {
+                return Swal.fire(texts.missingData, texts.missingDataTxt, 'warning');
             }
 
             const tx = db.transaction(["inventory", "product_master"], "readwrite");
             tx.objectStore("inventory").add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
             tx.objectStore("product_master").put({ barcode, name, photo });
-
             tx.oncomplete = () => {
-                Swal.fire('¡Éxito!', 'Producto registrado', 'success');
+                Swal.fire(texts.success, texts.saved, 'success');
                 limpiar();
                 showView('home');
             };
@@ -247,13 +340,13 @@
             document.getElementById('expiryDate').value = '';
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
             document.getElementById('photo-input').value = '';
-            document.getElementById('ocr-input').value = '';
         }
 
         function renderInventory() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = "";
             if (!db) return;
+            const texts = i18n[currentLang];
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
@@ -261,12 +354,12 @@
                         <div class="card" onclick="openDetail(${c.value.id})">
                             <div style="display:flex; gap:12px; align-items:center;">
                                 <img src="${c.value.photo}" style="width:55px; height:55px; object-fit:cover; border-radius:8px;">
-                                <div><strong>${c.value.name}</strong><br><small>📅 Vence: ${c.value.expiry}</small></div>
+                                <div><strong>${c.value.name}</strong><br><small>📅 ${texts.details.expiry}: ${c.value.expiry}</small></div>
                             </div>
                         </div>`;
                     c.continue();
                 } else if (list.innerHTML === "") {
-                    list.innerHTML = "<p style='text-align:center; color:#888;'>Bodega vacía</p>";
+                    list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
                 }
             };
         }
@@ -274,20 +367,22 @@
         function openDetail(id) {
             db.transaction("inventory").objectStore("inventory").get(id).onsuccess = e => {
                 const p = e.target.result;
+                const texts = i18n[currentLang];
                 document.getElementById('detail-content').innerHTML = `
                     <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
-                    <h2 style="margin:15px 0 5px 0;">${p.name}</h2>
-                    <p><b>Código:</b> ${p.barcode || 'N/A'}</p>
-                    <p><b>Compra:</b> ${p.date}</p>
-                    <p style="color:var(--danger); font-size:1.2rem;"><b>Vencimiento:</b> ${p.expiry}</p>
-                    <button class="btn-main" style="background:var(--danger)" onclick="deleteItem(${p.id})">🗑️ DESECHAR</button>
+                    <h2>${p.name}</h2>
+                    <p><b>${texts.details.code}:</b> ${p.barcode || 'N/A'}</p>
+                    <p><b>${texts.details.buy}:</b> ${p.date}</p>
+                    <p style="color:var(--danger); font-size:1.2rem;"><b>${texts.details.expiry}:</b> ${p.expiry}</p>
+                    <button class="btn-main" style="background:var(--danger)" onclick="deleteItem(${p.id})">${texts.details.delete}</button>
                 `;
                 showView('detail');
             };
         }
 
         function deleteItem(id) {
-            Swal.fire({ title: '¿Eliminar?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí' }).then(r => {
+            const texts = i18n[currentLang];
+            Swal.fire({ title: texts.deleteConfirm, icon: 'warning', showCancelButton: true, confirmButtonText: texts.confirmBtn }).then(r => {
                 if(r.isConfirmed) {
                     db.transaction("inventory", "readwrite").objectStore("inventory").delete(id);
                     showView('home');
@@ -300,27 +395,29 @@
             list.innerHTML = "";
             const today = new Date().setHours(0,0,0,0);
             if (!db) return;
+            const texts = i18n[currentLang];
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
                     const p = c.value;
                     const expDate = new Date(p.expiry).setHours(0,0,0,0);
                     const diff = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-                    let alertClass = "";
-                    let alertText = "";
-                    if (diff < 0) { alertClass = "alert-vencido"; alertText = "🚨 VENCIDO"; }
-                    else if (diff <= 3) { alertClass = "alert-3dias"; alertText = "⚠️ VENCE EN 3 DÍAS"; }
-                    else if (diff <= 5) { alertClass = "alert-5dias"; alertText = "⏳ VENCE EN 5 DÍAS"; }
+                    let alertClass = ""; let alertText = "";
+                    if (diff < 0) { alertClass = "alert-vencido"; alertText = texts.expired; }
+                    else if (diff <= 3) { alertClass = "alert-3dias"; alertText = texts.expires3; }
+                    else if (diff <= 5) { alertClass = "alert-5dias"; alertText = texts.expires5; }
 
                     if (alertClass !== "") {
                         list.innerHTML += `
                             <div class="card alert-item ${alertClass}" onclick="openDetail(${p.id})">
                                 <b style="font-size: 0.75rem;">${alertText}</b><br>
                                 <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span><br>
-                                <small>Vence: ${p.expiry}</small>
+                                <small>${texts.details.expiry}: ${p.expiry}</small>
                             </div>`;
                     }
                     c.continue();
+                } else if (list.innerHTML === "") {
+                    list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.noAlerts}</p>`;
                 }
             };
         }
@@ -360,7 +457,7 @@
                 const tx = db.transaction(["inventory", "product_master"], "readwrite");
                 if(data.inventory) data.inventory.forEach(i => { delete i.id; tx.objectStore("inventory").add(i); });
                 if(data.product_master) data.product_master.forEach(m => tx.objectStore("product_master").put(m));
-                tx.oncomplete = () => { Swal.fire('Backup Importado', '', 'success'); renderInventory(); };
+                tx.oncomplete = () => { Swal.fire(i18n[currentLang].success, '', 'success'); renderInventory(); };
             };
             reader.readAsText(file);
         }
