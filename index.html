@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v8 - Gestión Pro</title>
+    <title>Despensa Pro v9 - Reportes & Excel</title>
     <link rel="manifest" href="manifest.json">
+    
+    <!-- Librerías de Terceros -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+    <!-- Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
@@ -16,8 +24,7 @@
         .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
         
         .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
-        .lang-select option { color: black; }
-
+        
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -37,8 +44,7 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
-        /* Estilos de alerta agrupada */
-        .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; display: flex; flex-direction: column; gap: 5px; }
+        .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; }
         .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
         .alert-5dias { border-left-color: var(--warning-5d) !important; background: #fffde7 !important; }
@@ -55,25 +61,21 @@
         #reader { width: 100%; height: 80%; }
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
         
-        .qty-selector { display: flex; align-items: center; gap: 10px; margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 10px; }
-        .qty-selector input { width: 80px; margin-top: 0; text-align: center; }
+        .qty-row { display: flex; align-items: center; gap: 10px; background: #e8f5e9; padding: 10px; border-radius: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="app-bar">
-        <select class="lang-select" id="languageSelector" onchange="changeLanguage(this.value)" style="width: auto;">
+        <select class="lang-select" id="languageSelector" onchange="changeLanguage(this.value)">
             <option value="es">ES</option>
             <option value="en">EN</option>
         </select>
         <span id="txt-app-title">Mi Despensa Pro</span>
-        <div style="display: flex; gap: 15px;">
-            <i class="fas fa-file-export" onclick="exportData()"></i>
-            <i class="fas fa-file-import" onclick="document.getElementById('import-input').click()"></i>
-            <input type="file" id="import-input" style="display:none" accept=".json" onchange="importData(event)">
-        </div>
+        <i class="fas fa-cog" onclick="showToolsMenu()" style="cursor:pointer; font-size: 1.3rem;"></i>
     </div>
 
+    <!-- VISTAS -->
     <section id="view-home" class="view active">
         <h3 id="txt-inventory-title">Mi Inventario</h3>
         <div id="inventory-list"></div>
@@ -88,9 +90,11 @@
                 <button class="btn-barcode" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
             </div>
             <div id="api-loading">...</div>
+            
             <label id="lbl-photo">Foto del Producto *</label>
             <img id="current-photo-preview" src="">
             <input type="file" id="photo-input" accept="image/*" capture="environment" style="margin-top:10px;">
+            
             <label id="lbl-expiry">Fecha de Vencimiento *</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="date" id="expiryDate">
@@ -98,8 +102,15 @@
             </div>
             <input type="file" id="ocr-input" accept="image/*" capture="environment" style="display: none;">
             <div id="ocr-status">...</div>
+
+            <div class="qty-row">
+                <label id="lbl-qty" style="margin:0; flex:1;">Cantidad de unidades:</label>
+                <input type="number" id="regQty" value="1" min="1" style="width:70px; margin:0;">
+            </div>
+
             <label id="lbl-notes">Nombre / Notas *</label>
             <input type="text" id="notes" placeholder="...">
+            
             <button class="btn-main" onclick="saveProduct()" id="btn-save">GUARDAR EN BODEGA</button>
         </div>
     </section>
@@ -113,6 +124,9 @@
         <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> <span id="txt-back">VOLVER</span></button>
         <div id="detail-content" class="card"></div>
     </section>
+
+    <!-- HERRAMIENTAS OCULTAS -->
+    <input type="file" id="import-excel-input" style="display:none" accept=".xlsx, .xls" onchange="importFromExcel(event)">
 
     <div id="scanner-container">
         <div id="reader"></div>
@@ -134,10 +148,10 @@
                 back: "VOLVER", cancelScan: "CANCELAR", navHome: "Bodega", navAdd: "Agregar", navAlerts: "Alertas",
                 emptyPantry: "Bodega vacía", noAlerts: "No hay alertas próximas", searchApi: "Buscando en internet...",
                 ocrStatus: "Analizando fecha...", success: "¡Éxito!", saved: "Producto registrado",
-                missingData: "Faltan Datos", missingDataTxt: "Asegúrate de poner Nombre, Fecha y tomar una Foto.",
-                deleteConfirm: "¿Cuántas unidades deseas eliminar?", confirmBtn: "Eliminar unidades",
-                expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO", expires5: "⏳ POR VENCER",
-                units: "unidades", unit: "unidad", available: "Disponibles", removeQty: "Cantidad a eliminar:",
+                missingData: "Faltan Datos", missingDataTxt: "Nombre, Fecha y Foto son requeridos.",
+                qty: "Cantidad de unidades:", expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO",
+                expires5: "⏳ POR VENCER", units: "unid.", toolsTitle: "Herramientas",
+                expExcel: "Exportar a Excel", impExcel: "Importar desde Excel", genPdf: "Generar Reporte PDF",
                 details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" }
             },
             en: {
@@ -147,34 +161,33 @@
                 back: "BACK", cancelScan: "CANCEL", navHome: "Pantry", navAdd: "Add", navAlerts: "Alerts",
                 emptyPantry: "Pantry is empty", noAlerts: "No upcoming alerts", searchApi: "Searching online...",
                 ocrStatus: "Analyzing date...", success: "Success!", saved: "Product registered",
-                missingData: "Missing Data", missingDataTxt: "Please ensure Name, Date and Photo are provided.",
-                deleteConfirm: "How many units do you want to remove?", confirmBtn: "Remove units",
-                expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON", expires5: "⏳ NEAR EXPIRY",
-                units: "units", unit: "unit", available: "Available", removeQty: "Qty to remove:",
+                missingData: "Missing Data", missingDataTxt: "Name, Date and Photo are required.",
+                qty: "Unit quantity:", expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON",
+                expires5: "⏳ NEAR EXPIRY", units: "units", toolsTitle: "Tools",
+                expExcel: "Export to Excel", impExcel: "Import from Excel", genPdf: "Generate PDF Report",
                 details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" }
             }
         };
 
         let currentLang = localStorage.getItem('pantryLang') || 'es';
         function applyLanguage() {
-            const texts = i18n[currentLang];
-            document.getElementById('txt-app-title').innerText = texts.appTitle;
-            document.getElementById('txt-inventory-title').innerText = texts.inventoryTitle;
-            document.getElementById('txt-add-title').innerText = texts.addTitle;
-            document.getElementById('lbl-barcode').innerText = texts.barcode;
-            document.getElementById('lbl-photo').innerText = texts.photo;
-            document.getElementById('lbl-expiry').innerText = texts.expiry;
-            document.getElementById('txt-read').innerText = texts.read;
-            document.getElementById('lbl-notes').innerText = texts.notes;
-            document.getElementById('btn-save').innerText = texts.save;
-            document.getElementById('txt-alerts-title').innerText = texts.alertsTitle;
-            document.getElementById('txt-back').innerText = texts.back;
-            document.getElementById('btn-cancel-scan').innerText = texts.cancelScan;
-            document.getElementById('nav-home').innerText = texts.navHome;
-            document.getElementById('nav-add').innerText = texts.navAdd;
-            document.getElementById('nav-alerts').innerText = texts.navAlerts;
-            document.getElementById('api-loading').innerText = texts.searchApi;
-            document.getElementById('ocr-status').innerText = texts.ocrStatus;
+            const t = i18n[currentLang];
+            document.getElementById('txt-app-title').innerText = t.appTitle;
+            document.getElementById('txt-inventory-title').innerText = t.inventoryTitle;
+            document.getElementById('txt-add-title').innerText = t.addTitle;
+            document.getElementById('lbl-barcode').innerText = t.barcode;
+            document.getElementById('lbl-photo').innerText = t.photo;
+            document.getElementById('lbl-expiry').innerText = t.expiry;
+            document.getElementById('txt-read').innerText = t.read;
+            document.getElementById('lbl-notes').innerText = t.notes;
+            document.getElementById('btn-save').innerText = t.save;
+            document.getElementById('txt-alerts-title').innerText = t.alertsTitle;
+            document.getElementById('txt-back').innerText = t.back;
+            document.getElementById('btn-cancel-scan').innerText = t.cancelScan;
+            document.getElementById('nav-home').innerText = t.navHome;
+            document.getElementById('nav-add').innerText = t.navAdd;
+            document.getElementById('nav-alerts').innerText = t.navAlerts;
+            document.getElementById('lbl-qty').innerText = t.qty;
             document.getElementById('languageSelector').value = currentLang;
         }
 
@@ -194,73 +207,76 @@
 
         function initDB() {
             const request = indexedDB.open("DespensaSmartDB", 5);
+            request.onsuccess = e => { db = e.target.result; renderInventory(); };
             request.onupgradeneeded = e => {
                 db = e.target.result;
                 if(!db.objectStoreNames.contains("inventory")) db.createObjectStore("inventory", { keyPath: "id", autoIncrement: true });
                 if(!db.objectStoreNames.contains("product_master")) db.createObjectStore("product_master", { keyPath: "barcode" });
             };
-            request.onsuccess = e => { db = e.target.result; renderInventory(); };
         }
 
+        // FOTOS Y OCR
         document.getElementById('photo-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = ev => document.getElementById('current-photo-preview').src = ev.target.result;
-                reader.readAsDataURL(file);
+                const r = new FileReader();
+                r.onload = ev => document.getElementById('current-photo-preview').src = ev.target.result;
+                r.readAsDataURL(file);
             }
         });
 
         document.getElementById('ocr-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = async function(event) {
-                    const status = document.getElementById('ocr-status');
-                    status.style.display = 'block';
+                const r = new FileReader();
+                r.onload = async function(event) {
+                    document.getElementById('ocr-status').style.display = 'block';
                     try {
-                        const result = await Tesseract.recognize(event.target.result, 'eng+spa');
-                        const detectedDate = parseDateFromText(result.data.text);
-                        if (detectedDate) document.getElementById('expiryDate').value = detectedDate;
+                        const res = await Tesseract.recognize(event.target.result, 'eng+spa');
+                        const d = parseDateFromText(res.data.text);
+                        if (d) document.getElementById('expiryDate').value = d;
                     } catch (err) { console.error(err); }
-                    status.style.display = 'none';
+                    document.getElementById('ocr-status').style.display = 'none';
                 };
-                reader.readAsDataURL(file);
+                r.readAsDataURL(file);
             }
         });
 
         function parseDateFromText(text) {
             text = text.toUpperCase();
-            const regexes = [/\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/, /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/, /\b(\d{2})[\/\-. ](\d{4})\b/];
-            for (let reg of regexes) {
-                const match = text.match(reg);
-                if (match) {
-                    if (match.length === 3) return `${match[2].length === 2 ? "20"+match[2] : match[2]}-${match[1]}-01`;
-                    if (match.length === 4) {
-                        const y = match[3].length === 2 ? "20"+match[3] : match[3];
-                        return `${y}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
-                    }
+            const reg = [/\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{4})\b/, /\b(\d{2})[\/\-. ](\d{2})[\/\-. ](\d{2})\b/, /\b(\d{2})[\/\-. ](\d{4})\b/];
+            for (let r of reg) {
+                const m = text.match(r);
+                if (m) {
+                    if (m.length === 3) return `${m[2].length === 2 ? "20"+m[2] : m[2]}-${m[1]}-01`;
+                    if (m.length === 4) return `${m[3].length === 2 ? "20"+m[3] : m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
                 }
             }
             return null;
         }
 
+        // GUARDADO
         function saveProduct() {
             const barcode = document.getElementById('barcode').value;
             const name = document.getElementById('notes').value;
             const expiry = document.getElementById('expiryDate').value;
             const photo = document.getElementById('current-photo-preview').src;
-            const texts = i18n[currentLang];
+            const qty = parseInt(document.getElementById('regQty').value) || 1;
+            const t = i18n[currentLang];
 
-            if (!name || !expiry || photo === PLACEHOLDER) {
-                return Swal.fire(texts.missingData, texts.missingDataTxt, 'warning');
-            }
+            if (!name || !expiry || photo === PLACEHOLDER) return Swal.fire(t.missingData, t.missingDataTxt, 'warning');
 
             const tx = db.transaction(["inventory", "product_master"], "readwrite");
-            tx.objectStore("inventory").add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
-            tx.objectStore("product_master").put({ barcode, name, photo });
+            const invStore = tx.objectStore("inventory");
+            const mstStore = tx.objectStore("product_master");
+
+            for(let i=0; i<qty; i++) {
+                invStore.add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
+            }
+            mstStore.put({ barcode, name, photo });
+
             tx.oncomplete = () => {
-                Swal.fire(texts.success, texts.saved, 'success');
+                Swal.fire(t.success, t.saved, 'success');
                 limpiar(); renderInventory();
             };
         }
@@ -269,88 +285,167 @@
             document.getElementById('barcode').value = '';
             document.getElementById('notes').value = '';
             document.getElementById('expiryDate').value = '';
+            document.getElementById('regQty').value = '1';
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
-            document.getElementById('photo-input').value = '';
         }
 
-        // --- LÓGICA DE AGRUPACIÓN (BODEGA Y ALERTAS) ---
-        function getGroupedData(callback) {
+        // MENU DE HERRAMIENTAS
+        function showToolsMenu() {
+            const t = i18n[currentLang];
+            Swal.fire({
+                title: t.toolsTitle,
+                showConfirmButton: false,
+                html: `
+                    <button class="btn-main" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> ${t.expExcel}</button>
+                    <button class="btn-main" onclick="document.getElementById('import-excel-input').click(); Swal.close();"><i class="fas fa-upload"></i> ${t.impExcel}</button>
+                    <button class="btn-main" style="background:#607d8b" onclick="generatePDF()"><i class="fas fa-file-pdf"></i> ${t.genPdf}</button>
+                `
+            });
+        }
+
+        // EXCEL EXPORT / IMPORT
+        function exportToExcel() {
+            const tx = db.transaction("inventory", "readonly");
+            tx.objectStore("inventory").getAll().onsuccess = e => {
+                const data = e.target.result.map(i => ({
+                    "Producto": i.name,
+                    "Código": i.barcode,
+                    "Vencimiento": i.expiry,
+                    "Fecha Compra": i.date,
+                    "Foto_Base64": i.photo
+                }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+                XLSX.writeFile(wb, "Inventario_Despensa.xlsx");
+            };
+        }
+
+        function importFromExcel(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = e => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                
+                const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                json.forEach(row => {
+                    const item = {
+                        name: row["Producto"],
+                        barcode: row["Código"] || "",
+                        expiry: row["Vencimiento"],
+                        date: row["Fecha Compra"],
+                        photo: row["Foto_Base64"] || PLACEHOLDER
+                    };
+                    tx.objectStore("inventory").add(item);
+                    tx.objectStore("product_master").put({barcode: item.barcode, name: item.name, photo: item.photo});
+                });
+                tx.oncomplete = () => { Swal.fire("Importado", "", "success"); renderInventory(); };
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // PDF REPORT
+        async function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const t = i18n[currentLang];
+            const today = new Date().setHours(0,0,0,0);
+
+            doc.setFontSize(18);
+            doc.text(t.appTitle, 14, 20);
+            doc.setFontSize(10);
+            doc.text("Reporte generado el: " + new Date().toLocaleString(), 14, 28);
+
+            const tx = db.transaction("inventory", "readonly");
+            tx.objectStore("inventory").getAll().onsuccess = e => {
+                const items = e.target.result.sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
+                const body = items.map(i => {
+                    const isExpired = new Date(i.expiry) < today;
+                    return [
+                        i.name,
+                        i.barcode,
+                        i.expiry,
+                        i.date,
+                        isExpired ? "VENCIDO" : "OK"
+                    ];
+                });
+
+                doc.autoTable({
+                    startY: 35,
+                    head: [['Producto', 'Código', 'Vencimiento', 'Compra', 'Estado']],
+                    body: body,
+                    didParseCell: function(data) {
+                        if (data.row.raw && data.row.raw[4] === "VENCIDO") {
+                            data.cell.styles.textColor = [211, 47, 47];
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+
+                doc.save("Reporte_Despensa.pdf");
+            };
+        }
+
+        // RENDER INVENTORY
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = ""; if (!db) return;
+            const t = i18n[currentLang];
             const products = {};
+
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
                     const item = c.value;
                     const key = item.barcode || item.name;
-                    if (!products[key]) products[key] = { name: item.name, barcode: item.barcode, photo: item.photo, dates: {} };
+                    if (!products[key]) products[key] = { name: item.name, photo: item.photo, dates: {} };
                     if (!products[key].dates[item.expiry]) products[key].dates[item.expiry] = [];
                     products[key].dates[item.expiry].push(item);
                     c.continue();
                 } else {
-                    callback(products);
+                    for (const key in products) {
+                        const p = products[key];
+                        let total = 0; let submenu = "";
+                        const sorted = Object.keys(p.dates).sort();
+                        for (const date of sorted) {
+                            const count = p.dates[date].length;
+                            total += count;
+                            const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+                            let style = "";
+                            if (diff < 0) style = "alert-vencido";
+                            else if (diff <= 3) style = "alert-3dias";
+                            else if (diff <= 5) style = "alert-5dias";
+
+                            submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${key}', '${date}')">
+                                <span>${date}</span><b>${count} ${t.units}</b></button>`;
+                        }
+                        list.innerHTML += `
+                            <div class="card">
+                                <div class="card-header" onclick="toggleSubmenu('${key}')">
+                                    <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
+                                    <div><strong>${p.name}</strong></div>
+                                    <span class="badge-count">${total}</span>
+                                </div>
+                                <div id="submenu-${key}" class="submenu-dates">${submenu}</div>
+                            </div>`;
+                    }
                 }
             };
         }
 
-        function renderInventory() {
-            const list = document.getElementById('inventory-list');
-            list.innerHTML = ""; if (!db) return;
-            const texts = i18n[currentLang];
-
-            getGroupedData(products => {
-                for (const key in products) {
-                    const p = products[key];
-                    let totalCount = 0; let submenuHtml = "";
-                    const sortedDates = Object.keys(p.dates).sort();
-
-                    for (const date of sortedDates) {
-                        const count = p.dates[date].length;
-                        totalCount += count;
-                        const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
-                        let dateStyle = "";
-                        if (diff < 0) dateStyle = "alert-vencido";
-                        else if (diff <= 3) dateStyle = "alert-3dias";
-                        else if (diff <= 5) dateStyle = "alert-5dias";
-
-                        submenuHtml += `
-                            <button class="date-btn ${dateStyle}" onclick="openDetail('${p.name}', '${p.barcode}', '${date}')">
-                                <span>${date}</span>
-                                <b>${count} ${count > 1 ? texts.units : texts.unit}</b>
-                            </button>`;
-                    }
-
-                    list.innerHTML += `
-                        <div class="card">
-                            <div class="card-header" onclick="toggleSubmenu('${key}')">
-                                <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
-                                <div><strong>${p.name}</strong></div>
-                                <span class="badge-count">${totalCount}</span>
-                            </div>
-                            <div id="submenu-${key}" class="submenu-dates">
-                                ${submenuHtml}
-                            </div>
-                        </div>`;
-                }
-                if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
-            });
-        }
-
-        function toggleSubmenu(key) {
-            document.getElementById(`submenu-${key}`).classList.toggle('active');
-        }
+        function toggleSubmenu(key) { document.getElementById(`submenu-${key}`).classList.toggle('active'); }
 
         function openDetail(name, barcode, expiry) {
-            const texts = i18n[currentLang];
-            const transaction = db.transaction("inventory", "readonly");
-            const store = transaction.objectStore("inventory");
+            const t = i18n[currentLang];
+            const tx = db.transaction("inventory", "readonly");
             const matches = [];
-
-            store.openCursor().onsuccess = e => {
+            tx.objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
-                    const item = c.value;
-                    if (item.name === name && item.barcode === barcode && item.expiry === expiry) {
-                        matches.push(item);
-                    }
+                    const i = c.value;
+                    if (i.name === name && (i.barcode === barcode || (!i.barcode && !barcode)) && i.expiry === expiry) matches.push(i);
                     c.continue();
                 } else {
                     const p = matches[0];
@@ -358,126 +453,67 @@
                     document.getElementById('detail-content').innerHTML = `
                         <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
                         <h2>${p.name}</h2>
-                        <p><b>${texts.available}:</b> ${count} ${count > 1 ? texts.units : texts.unit}</p>
-                        <p><b>${texts.details.expiry}:</b> ${p.expiry}</p>
-                        
-                        <div class="qty-selector">
-                            <span>${texts.removeQty}</span>
-                            <input type="number" id="deleteQty" value="1" min="1" max="${count}">
+                        <p><b>${t.units}:</b> ${count}</p>
+                        <p><b>${t.details.expiry}:</b> ${p.expiry}</p>
+                        <div class="qty-row">
+                            <span>Eliminar:</span>
+                            <input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;">
                         </div>
-
                         <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">
-                            ${texts.details.delete}
-                        </button>
-                    `;
+                            ${t.details.delete}
+                        </button>`;
                     showView('detail');
                 }
             };
         }
 
         function deleteMultiple(name, barcode, expiry) {
-            const texts = i18n[currentLang];
             const qty = parseInt(document.getElementById('deleteQty').value);
-            
-            Swal.fire({ 
-                title: texts.deleteConfirm, 
-                text: `${qty} ${texts.units}`,
-                icon: 'warning', 
-                showCancelButton: true, 
-                confirmButtonText: texts.confirmBtn 
-            }).then(r => {
-                if(r.isConfirmed) {
-                    const tx = db.transaction("inventory", "readwrite");
-                    const store = tx.objectStore("inventory");
-                    let deleted = 0;
-
-                    store.openCursor().onsuccess = e => {
-                        const c = e.target.result;
-                        if (c && deleted < qty) {
-                            const item = c.value;
-                            if (item.name === name && item.barcode === barcode && item.expiry === expiry) {
-                                store.delete(c.key);
-                                deleted++;
-                            }
-                            c.continue();
-                        } else {
-                            showView('home');
-                        }
-                    };
-                }
-            });
+            const tx = db.transaction("inventory", "readwrite");
+            const store = tx.objectStore("inventory");
+            let del = 0;
+            store.openCursor().onsuccess = e => {
+                const c = e.target.result;
+                if (c && del < qty) {
+                    const i = c.value;
+                    if (i.name === name && (i.barcode === barcode || (!i.barcode && !barcode)) && i.expiry === expiry) {
+                        store.delete(c.key); del++;
+                    }
+                    c.continue();
+                } else { showView('home'); }
+            };
         }
 
         function checkAlerts() {
             const list = document.getElementById('alerts-list'); list.innerHTML = "";
+            const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-            const texts = i18n[currentLang];
-
-            getGroupedData(products => {
-                for (const key in products) {
-                    const p = products[key];
-                    for (const date in p.dates) {
-                        const count = p.dates[date].length;
-                        const expDate = new Date(date).setHours(0,0,0,0);
-                        const diff = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-
-                        let alertClass = ""; let alertText = "";
-                        if (diff < 0) { alertClass = "alert-vencido"; alertText = texts.expired; }
-                        else if (diff <= 3) { alertClass = "alert-3dias"; alertText = texts.expires3; }
-                        else if (diff <= 5) { alertClass = "alert-5dias"; alertText = texts.expires5; }
-
-                        if (alertClass !== "") {
-                            list.innerHTML += `
-                                <div class="card alert-item ${alertClass}" onclick="openDetail('${p.name}', '${p.barcode}', '${date}')">
-                                    <b style="font-size: 0.75rem;">${alertText} (${count} ${count > 1 ? texts.units : texts.unit})</b>
-                                    <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span>
-                                    <small>${texts.details.expiry}: ${date}</small>
-                                </div>`;
-                        }
+            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
+                const c = e.target.result;
+                if (c) {
+                    const p = c.value;
+                    const diff = Math.ceil((new Date(p.expiry) - today) / (1000 * 60 * 60 * 24));
+                    let style = ""; let txt = "";
+                    if (diff < 0) { style = "alert-vencido"; txt = t.expired; }
+                    else if (diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
+                    else if (diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
+                    if (style) {
+                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${p.name}', '${p.barcode}', '${p.expiry}')">
+                            <b>${txt}</b><br><span>${p.name}</span><br><small>${p.expiry}</small></div>`;
                     }
+                    c.continue();
                 }
-                if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.noAlerts}</p>`;
-            });
+            };
         }
 
-        function showView(viewId) {
+        function showView(id) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
-            document.getElementById('view-' + viewId).classList.add('active');
-            const btnIdx = {home: 0, add: 1, alerts: 2};
-            if(viewId in btnIdx) document.querySelectorAll('.nav-item')[btnIdx[viewId]].classList.add('active');
-            if(viewId === 'home') renderInventory();
-            if(viewId === 'alerts') checkAlerts();
-        }
-
-        function exportData() {
-            const tx = db.transaction(["inventory", "product_master"], "readonly");
-            const data = {};
-            tx.objectStore("inventory").getAll().onsuccess = e => {
-                data.inventory = e.target.result;
-                tx.objectStore("product_master").getAll().onsuccess = e2 => {
-                    data.product_master = e2.target.result;
-                    const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(blob);
-                    a.download = `backup_despensa.json`;
-                    a.click();
-                };
-            };
-        }
-
-        function importData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = e => {
-                const data = JSON.parse(e.target.result);
-                const tx = db.transaction(["inventory", "product_master"], "readwrite");
-                if(data.inventory) data.inventory.forEach(i => { delete i.id; tx.objectStore("inventory").add(i); });
-                if(data.product_master) data.product_master.forEach(m => tx.objectStore("product_master").put(m));
-                tx.oncomplete = () => { Swal.fire(i18n[currentLang].success, '', 'success'); renderInventory(); };
-            };
-            reader.readAsText(file);
+            document.getElementById('view-' + id).classList.add('active');
+            const idx = {home:0, add:1, alerts:2};
+            if(id in idx) document.querySelectorAll('.nav-item')[idx[id]].classList.add('active');
+            if(id === 'home') renderInventory();
+            if(id === 'alerts') checkAlerts();
         }
 
         async function fetchProductInfo(barcode) {
