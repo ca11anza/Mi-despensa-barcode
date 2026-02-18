@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v7 - Grupos</title>
+    <title>Despensa Pro v8 - Gestión Pro</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -22,12 +22,10 @@
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* Estilos de Tarjeta Agrupada */
         .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; }
         .card-header { display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .badge-count { background: var(--primary); color: white; border-radius: 20px; padding: 2px 10px; font-size: 0.8rem; margin-left: auto; }
         
-        /* Submenú de fechas */
         .submenu-dates { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; display: none; flex-direction: column; gap: 8px; }
         .submenu-dates.active { display: flex; }
         .date-btn { background: #f0f0f0; border: none; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem; cursor: pointer; border-left: 5px solid #ccc; }
@@ -39,27 +37,32 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
-        .alert-vencido { border-left-color: var(--danger) !important; }
-        .alert-3dias { border-left-color: var(--warning-3d) !important; }
-        .alert-5dias { border-left-color: var(--warning-5d) !important; }
+        /* Estilos de alerta agrupada */
+        .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; display: flex; flex-direction: column; gap: 5px; }
+        .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
+        .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
+        .alert-5dias { border-left-color: var(--warning-5d) !important; background: #fffde7 !important; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; z-index: 100; }
         .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; cursor: pointer; }
         .nav-item.active { color: var(--primary); font-weight: bold; }
         .nav-item i { font-size: 1.3rem; margin-bottom: 3px; }
 
-        input, textarea { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        input, textarea, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
         label { display: block; margin-top: 12px; font-weight: bold; font-size: 0.85rem; color: #444; }
         
         #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 1000; }
         #reader { width: 100%; height: 80%; }
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
+        
+        .qty-selector { display: flex; align-items: center; gap: 10px; margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 10px; }
+        .qty-selector input { width: 80px; margin-top: 0; text-align: center; }
     </style>
 </head>
 <body>
 
     <div class="app-bar">
-        <select class="lang-select" id="languageSelector" onchange="changeLanguage(this.value)">
+        <select class="lang-select" id="languageSelector" onchange="changeLanguage(this.value)" style="width: auto;">
             <option value="es">ES</option>
             <option value="en">EN</option>
         </select>
@@ -125,75 +128,34 @@
     <script>
         const i18n = {
             es: {
-                appTitle: "Mi Despensa Pro",
-                inventoryTitle: "Mi Inventario",
-                addTitle: "Registrar Compra",
-                barcode: "Código de Barras",
-                photo: "Foto del Producto *",
-                expiry: "Fecha de Vencimiento *",
-                read: "Leer",
-                notes: "Nombre / Notas *",
-                save: "GUARDAR EN BODEGA",
-                alertsTitle: "Alertas de Vencimiento",
-                back: "VOLVER",
-                cancelScan: "CANCELAR",
-                navHome: "Bodega",
-                navAdd: "Agregar",
-                navAlerts: "Alertas",
-                emptyPantry: "Bodega vacía",
-                noAlerts: "No hay alertas próximas",
-                searchApi: "Buscando en internet...",
-                ocrStatus: "Analizando fecha...",
-                success: "¡Éxito!",
-                saved: "Producto registrado",
-                missingData: "Faltan Datos",
-                missingDataTxt: "Asegúrate de poner Nombre, Fecha y tomar una Foto.",
-                deleteConfirm: "¿Eliminar una unidad?",
-                confirmBtn: "Sí, eliminar",
-                expired: "🚨 VENCIDO",
-                expires3: "⚠️ VENCE PRONTO",
-                expires5: "⏳ POR VENCER",
-                units: "unidades",
-                unit: "unidad",
-                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR 1 UNIDAD" }
+                appTitle: "Mi Despensa Pro", inventoryTitle: "Mi Inventario", addTitle: "Registrar Compra",
+                barcode: "Código de Barras", photo: "Foto del Producto *", expiry: "Fecha de Vencimiento *",
+                read: "Leer", notes: "Nombre / Notas *", save: "GUARDAR EN BODEGA", alertsTitle: "Alertas de Vencimiento",
+                back: "VOLVER", cancelScan: "CANCELAR", navHome: "Bodega", navAdd: "Agregar", navAlerts: "Alertas",
+                emptyPantry: "Bodega vacía", noAlerts: "No hay alertas próximas", searchApi: "Buscando en internet...",
+                ocrStatus: "Analizando fecha...", success: "¡Éxito!", saved: "Producto registrado",
+                missingData: "Faltan Datos", missingDataTxt: "Asegúrate de poner Nombre, Fecha y tomar una Foto.",
+                deleteConfirm: "¿Cuántas unidades deseas eliminar?", confirmBtn: "Eliminar unidades",
+                expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO", expires5: "⏳ POR VENCER",
+                units: "unidades", unit: "unidad", available: "Disponibles", removeQty: "Cantidad a eliminar:",
+                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" }
             },
             en: {
-                appTitle: "My Pantry Pro",
-                inventoryTitle: "My Inventory",
-                addTitle: "Register Purchase",
-                barcode: "Barcode",
-                photo: "Product Photo *",
-                expiry: "Expiry Date *",
-                read: "Scan",
-                notes: "Name / Notes *",
-                save: "SAVE TO PANTRY",
-                alertsTitle: "Expiry Alerts",
-                back: "BACK",
-                cancelScan: "CANCEL",
-                navHome: "Pantry",
-                navAdd: "Add",
-                navAlerts: "Alerts",
-                emptyPantry: "Pantry is empty",
-                noAlerts: "No upcoming alerts",
-                searchApi: "Searching online...",
-                ocrStatus: "Analyzing date...",
-                success: "Success!",
-                saved: "Product registered",
-                missingData: "Missing Data",
-                missingDataTxt: "Please ensure Name, Date and Photo are provided.",
-                deleteConfirm: "Remove one unit?",
-                confirmBtn: "Yes, delete",
-                expired: "🚨 EXPIRED",
-                expires3: "⚠️ EXPIRING SOON",
-                expires5: "⏳ NEAR EXPIRY",
-                units: "units",
-                unit: "unit",
-                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE 1 UNIT" }
+                appTitle: "My Pantry Pro", inventoryTitle: "My Inventory", addTitle: "Register Purchase",
+                barcode: "Barcode", photo: "Product Photo *", expiry: "Expiry Date *",
+                read: "Scan", notes: "Name / Notes *", save: "SAVE TO PANTRY", alertsTitle: "Expiry Alerts",
+                back: "BACK", cancelScan: "CANCEL", navHome: "Pantry", navAdd: "Add", navAlerts: "Alerts",
+                emptyPantry: "Pantry is empty", noAlerts: "No upcoming alerts", searchApi: "Searching online...",
+                ocrStatus: "Analyzing date...", success: "Success!", saved: "Product registered",
+                missingData: "Missing Data", missingDataTxt: "Please ensure Name, Date and Photo are provided.",
+                deleteConfirm: "How many units do you want to remove?", confirmBtn: "Remove units",
+                expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON", expires5: "⏳ NEAR EXPIRY",
+                units: "units", unit: "unit", available: "Available", removeQty: "Qty to remove:",
+                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" }
             }
         };
 
         let currentLang = localStorage.getItem('pantryLang') || 'es';
-
         function applyLanguage() {
             const texts = i18n[currentLang];
             document.getElementById('txt-app-title').innerText = texts.appTitle;
@@ -217,11 +179,8 @@
         }
 
         function changeLanguage(lang) {
-            currentLang = lang;
-            localStorage.setItem('pantryLang', lang);
-            applyLanguage();
-            renderInventory();
-            checkAlerts();
+            currentLang = lang; localStorage.setItem('pantryLang', lang);
+            applyLanguage(); renderInventory(); checkAlerts();
         }
 
         let db;
@@ -230,8 +189,7 @@
 
         window.onload = () => {
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
-            applyLanguage();
-            initDB();
+            applyLanguage(); initDB();
         };
 
         function initDB() {
@@ -303,8 +261,7 @@
             tx.objectStore("product_master").put({ barcode, name, photo });
             tx.oncomplete = () => {
                 Swal.fire(texts.success, texts.saved, 'success');
-                limpiar();
-                showView('home');
+                limpiar(); renderInventory();
             };
         }
 
@@ -316,136 +273,171 @@
             document.getElementById('photo-input').value = '';
         }
 
-        // --- LÓGICA DE RENDERIZADO AGRUPADO ---
-        function renderInventory() {
-            const list = document.getElementById('inventory-list');
-            list.innerHTML = "";
-            if (!db) return;
-            const texts = i18n[currentLang];
-
+        // --- LÓGICA DE AGRUPACIÓN (BODEGA Y ALERTAS) ---
+        function getGroupedData(callback) {
             const products = {};
-
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
                     const item = c.value;
                     const key = item.barcode || item.name;
-                    if (!products[key]) {
-                        products[key] = { name: item.name, photo: item.photo, dates: {} };
-                    }
-                    if (!products[key].dates[item.expiry]) {
-                        products[key].dates[item.expiry] = [];
-                    }
+                    if (!products[key]) products[key] = { name: item.name, barcode: item.barcode, photo: item.photo, dates: {} };
+                    if (!products[key].dates[item.expiry]) products[key].dates[item.expiry] = [];
                     products[key].dates[item.expiry].push(item);
                     c.continue();
                 } else {
-                    // Dibujar interfaz agrupada
-                    for (const key in products) {
-                        const p = products[key];
-                        let totalCount = 0;
-                        let submenuHtml = "";
-                        
-                        // Ordenar fechas para que la más próxima salga primero
-                        const sortedDates = Object.keys(p.dates).sort();
-
-                        for (const date of sortedDates) {
-                            const count = p.dates[date].length;
-                            totalCount += count;
-                            
-                            // Determinar color de alerta en el botón de fecha
-                            const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
-                            let dateStyle = "";
-                            if (diff < 0) dateStyle = "alert-vencido";
-                            else if (diff <= 3) dateStyle = "alert-3dias";
-                            else if (diff <= 5) dateStyle = "alert-5dias";
-
-                            submenuHtml += `
-                                <button class="date-btn ${dateStyle}" onclick="openDetail(${p.dates[date][0].id})">
-                                    <span>${date}</span>
-                                    <b>${count} ${count > 1 ? texts.units : texts.unit}</b>
-                                </button>`;
-                        }
-
-                        list.innerHTML += `
-                            <div class="card">
-                                <div class="card-header" onclick="toggleSubmenu('${key}')">
-                                    <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
-                                    <div>
-                                        <strong>${p.name}</strong>
-                                    </div>
-                                    <span class="badge-count">${totalCount}</span>
-                                </div>
-                                <div id="submenu-${key}" class="submenu-dates">
-                                    ${submenuHtml}
-                                </div>
-                            </div>`;
-                    }
-                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
+                    callback(products);
                 }
             };
         }
 
-        function toggleSubmenu(key) {
-            const el = document.getElementById(`submenu-${key}`);
-            el.classList.toggle('active');
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = ""; if (!db) return;
+            const texts = i18n[currentLang];
+
+            getGroupedData(products => {
+                for (const key in products) {
+                    const p = products[key];
+                    let totalCount = 0; let submenuHtml = "";
+                    const sortedDates = Object.keys(p.dates).sort();
+
+                    for (const date of sortedDates) {
+                        const count = p.dates[date].length;
+                        totalCount += count;
+                        const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+                        let dateStyle = "";
+                        if (diff < 0) dateStyle = "alert-vencido";
+                        else if (diff <= 3) dateStyle = "alert-3dias";
+                        else if (diff <= 5) dateStyle = "alert-5dias";
+
+                        submenuHtml += `
+                            <button class="date-btn ${dateStyle}" onclick="openDetail('${p.name}', '${p.barcode}', '${date}')">
+                                <span>${date}</span>
+                                <b>${count} ${count > 1 ? texts.units : texts.unit}</b>
+                            </button>`;
+                    }
+
+                    list.innerHTML += `
+                        <div class="card">
+                            <div class="card-header" onclick="toggleSubmenu('${key}')">
+                                <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
+                                <div><strong>${p.name}</strong></div>
+                                <span class="badge-count">${totalCount}</span>
+                            </div>
+                            <div id="submenu-${key}" class="submenu-dates">
+                                ${submenuHtml}
+                            </div>
+                        </div>`;
+                }
+                if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
+            });
         }
 
-        function openDetail(id) {
-            db.transaction("inventory").objectStore("inventory").get(id).onsuccess = e => {
-                const p = e.target.result;
-                const texts = i18n[currentLang];
-                document.getElementById('detail-content').innerHTML = `
-                    <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
-                    <h2>${p.name}</h2>
-                    <p><b>${texts.details.code}:</b> ${p.barcode || 'N/A'}</p>
-                    <p><b>${texts.details.buy}:</b> ${p.date}</p>
-                    <p style="color:var(--danger); font-size:1.2rem;"><b>${texts.details.expiry}:</b> ${p.expiry}</p>
-                    <button class="btn-main" style="background:var(--danger)" onclick="deleteItem(${p.id})">${texts.details.delete}</button>
-                `;
-                showView('detail');
+        function toggleSubmenu(key) {
+            document.getElementById(`submenu-${key}`).classList.toggle('active');
+        }
+
+        function openDetail(name, barcode, expiry) {
+            const texts = i18n[currentLang];
+            const transaction = db.transaction("inventory", "readonly");
+            const store = transaction.objectStore("inventory");
+            const matches = [];
+
+            store.openCursor().onsuccess = e => {
+                const c = e.target.result;
+                if (c) {
+                    const item = c.value;
+                    if (item.name === name && item.barcode === barcode && item.expiry === expiry) {
+                        matches.push(item);
+                    }
+                    c.continue();
+                } else {
+                    const p = matches[0];
+                    const count = matches.length;
+                    document.getElementById('detail-content').innerHTML = `
+                        <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
+                        <h2>${p.name}</h2>
+                        <p><b>${texts.available}:</b> ${count} ${count > 1 ? texts.units : texts.unit}</p>
+                        <p><b>${texts.details.expiry}:</b> ${p.expiry}</p>
+                        
+                        <div class="qty-selector">
+                            <span>${texts.removeQty}</span>
+                            <input type="number" id="deleteQty" value="1" min="1" max="${count}">
+                        </div>
+
+                        <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">
+                            ${texts.details.delete}
+                        </button>
+                    `;
+                    showView('detail');
+                }
             };
         }
 
-        function deleteItem(id) {
+        function deleteMultiple(name, barcode, expiry) {
             const texts = i18n[currentLang];
-            Swal.fire({ title: texts.deleteConfirm, icon: 'warning', showCancelButton: true, confirmButtonText: texts.confirmBtn }).then(r => {
+            const qty = parseInt(document.getElementById('deleteQty').value);
+            
+            Swal.fire({ 
+                title: texts.deleteConfirm, 
+                text: `${qty} ${texts.units}`,
+                icon: 'warning', 
+                showCancelButton: true, 
+                confirmButtonText: texts.confirmBtn 
+            }).then(r => {
                 if(r.isConfirmed) {
-                    db.transaction("inventory", "readwrite").objectStore("inventory").delete(id);
-                    showView('home');
+                    const tx = db.transaction("inventory", "readwrite");
+                    const store = tx.objectStore("inventory");
+                    let deleted = 0;
+
+                    store.openCursor().onsuccess = e => {
+                        const c = e.target.result;
+                        if (c && deleted < qty) {
+                            const item = c.value;
+                            if (item.name === name && item.barcode === barcode && item.expiry === expiry) {
+                                store.delete(c.key);
+                                deleted++;
+                            }
+                            c.continue();
+                        } else {
+                            showView('home');
+                        }
+                    };
                 }
             });
         }
 
         function checkAlerts() {
-            const list = document.getElementById('alerts-list'); 
-            list.innerHTML = "";
+            const list = document.getElementById('alerts-list'); list.innerHTML = "";
             const today = new Date().setHours(0,0,0,0);
-            if (!db) return;
             const texts = i18n[currentLang];
-            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
-                const c = e.target.result;
-                if (c) {
-                    const p = c.value;
-                    const expDate = new Date(p.expiry).setHours(0,0,0,0);
-                    const diff = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-                    let alertClass = ""; let alertText = "";
-                    if (diff < 0) { alertClass = "alert-vencido"; alertText = texts.expired; }
-                    else if (diff <= 3) { alertClass = "alert-3dias"; alertText = texts.expires3; }
-                    else if (diff <= 5) { alertClass = "alert-5dias"; alertText = texts.expires5; }
 
-                    if (alertClass !== "") {
-                        list.innerHTML += `
-                            <div class="card alert-item ${alertClass}" onclick="openDetail(${p.id})" style="border-left: 8px solid #ccc;">
-                                <b style="font-size: 0.75rem;">${alertText}</b><br>
-                                <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span><br>
-                                <small>${texts.details.expiry}: ${p.expiry}</small>
-                            </div>`;
+            getGroupedData(products => {
+                for (const key in products) {
+                    const p = products[key];
+                    for (const date in p.dates) {
+                        const count = p.dates[date].length;
+                        const expDate = new Date(date).setHours(0,0,0,0);
+                        const diff = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+
+                        let alertClass = ""; let alertText = "";
+                        if (diff < 0) { alertClass = "alert-vencido"; alertText = texts.expired; }
+                        else if (diff <= 3) { alertClass = "alert-3dias"; alertText = texts.expires3; }
+                        else if (diff <= 5) { alertClass = "alert-5dias"; alertText = texts.expires5; }
+
+                        if (alertClass !== "") {
+                            list.innerHTML += `
+                                <div class="card alert-item ${alertClass}" onclick="openDetail('${p.name}', '${p.barcode}', '${date}')">
+                                    <b style="font-size: 0.75rem;">${alertText} (${count} ${count > 1 ? texts.units : texts.unit})</b>
+                                    <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span>
+                                    <small>${texts.details.expiry}: ${date}</small>
+                                </div>`;
+                        }
                     }
-                    c.continue();
-                } else if (list.innerHTML === "") {
-                    list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.noAlerts}</p>`;
                 }
-            };
+                if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.noAlerts}</p>`;
+            });
         }
 
         function showView(viewId) {
