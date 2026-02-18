@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v12 - Reportes Avanzados</title>
+    <title>Despensa Pro v13 - Excel & Import Pro</title>
     <link rel="manifest" href="manifest.json">
     
     <!-- Librerías Externas -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+    <!-- Excel Support -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- PDF Support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
@@ -20,30 +23,39 @@
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; overscroll-behavior: contain; }
         .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; height: 50px; }
         .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
+        
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
         .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; }
         .card-header { display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .badge-count { background: var(--primary); color: white; border-radius: 20px; padding: 2px 10px; font-size: 0.8rem; margin-left: auto; }
+        
         .submenu-dates { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; display: none; flex-direction: column; gap: 8px; }
         .submenu-dates.active { display: flex; }
         .date-btn { background: #f0f0f0; border: none; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem; cursor: pointer; border-left: 5px solid #ccc; }
+        
         .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; font-weight: bold; cursor: pointer; }
         .btn-ocr { background: var(--info); color: white; border: none; padding: 10px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; }
         .btn-barcode { background: #1565c0; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
+        
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
+        
         .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; margin-bottom: 10px; }
         .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
         .alert-5dias { border-left-color: var(--warning-5d) !important; background: #fffde7 !important; }
+
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; z-index: 100; }
         .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; cursor: pointer; }
         .nav-item.active { color: var(--primary); font-weight: bold; }
         .nav-item i { font-size: 1.3rem; margin-bottom: 3px; }
+
         input, textarea, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
         label { display: block; margin-top: 12px; font-weight: bold; font-size: 0.85rem; color: #444; }
+        
         #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 1000; }
         #reader { width: 100%; height: 80%; }
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
@@ -111,6 +123,7 @@
         <div id="detail-content" class="card"></div>
     </section>
 
+    <!-- Herramientas Invisibles -->
     <input type="file" id="import-excel-input" style="display:none" accept=".xlsx, .xls" onchange="importFromExcel(event)">
     <canvas id="compress-canvas" style="display:none;"></canvas>
 
@@ -293,12 +306,9 @@
             document.getElementById('photo-input').value = '';
         }
 
-        function renderInventory() {
-            const list = document.getElementById('inventory-list');
-            list.innerHTML = ""; if (!db) return;
-            const t = i18n[currentLang];
+        // --- LÓGICA DE AGRUPACIÓN PARA UI Y REPORTES ---
+        function getGroupedData(callback) {
             const products = {};
-
             const tx = db.transaction("inventory", "readonly");
             tx.objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
@@ -310,31 +320,41 @@
                     products[key].dates[item.expiry].push(item);
                     c.continue();
                 } else {
-                    for (const key in products) {
-                        const p = products[key];
-                        let total = 0; let submenu = "";
-                        const sorted = Object.keys(p.dates).sort();
-                        for (const date of sorted) {
-                            const count = p.dates[date].length;
-                            total += count;
-                            const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
-                            let style = "";
-                            if (diff < 0) style = "alert-vencido";
-                            else if (diff <= 3) style = "alert-3dias";
-                            else if (diff <= 5) style = "alert-5dias";
-                            submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
-                                <span>${date}</span><b>${count} ${t.units}</b></button>`;
-                        }
-                        const cleanKey = key.replace(/\s+/g, '');
-                        list.innerHTML += `<div class="card">
-                            <div class="card-header" onclick="toggleSubmenu('${cleanKey}')">
-                                <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px; background:#eee;">
-                                <div><strong>${p.name}</strong></div><span class="badge-count">${total}</span>
-                            </div><div id="submenu-${cleanKey}" class="submenu-dates">${submenu}</div></div>`;
-                    }
-                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${t.emptyPantry}</p>`;
+                    callback(products);
                 }
             };
+        }
+
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = ""; if (!db) return;
+            const t = i18n[currentLang];
+
+            getGroupedData(products => {
+                for (const key in products) {
+                    const p = products[key];
+                    let total = 0; let submenu = "";
+                    const sorted = Object.keys(p.dates).sort();
+                    for (const date of sorted) {
+                        const count = p.dates[date].length;
+                        total += count;
+                        const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+                        let style = "";
+                        if (diff < 0) style = "alert-vencido";
+                        else if (diff <= 3) style = "alert-3dias";
+                        else if (diff <= 5) style = "alert-5dias";
+                        submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
+                            <span>${date}</span><b>${count} ${t.units}</b></button>`;
+                    }
+                    const cleanKey = key.replace(/\s+/g, '');
+                    list.innerHTML += `<div class="card">
+                        <div class="card-header" onclick="toggleSubmenu('${cleanKey}')">
+                            <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px; background:#eee;">
+                            <div><strong>${p.name}</strong></div><span class="badge-count">${total}</span>
+                        </div><div id="submenu-${cleanKey}" class="submenu-dates">${submenu}</div></div>`;
+                }
+                if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${t.emptyPantry}</p>`;
+            });
         }
 
         function toggleSubmenu(key) { 
@@ -388,33 +408,24 @@
             const list = document.getElementById('alerts-list'); list.innerHTML = "";
             const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-            const tx = db.transaction("inventory", "readonly");
-            const alertData = {};
-
-            tx.objectStore("inventory").openCursor().onsuccess = e => {
-                const c = e.target.result;
-                if (c) {
-                    const p = c.value;
-                    const diff = Math.ceil((new Date(p.expiry) - today) / (1000 * 60 * 60 * 24));
-                    if (diff <= 5) {
-                        const key = p.name + p.expiry;
-                        if (!alertData[key]) alertData[key] = { ...p, count: 0, diff };
-                        alertData[key].count++;
-                    }
-                    c.continue();
-                } else {
-                    for (const key in alertData) {
-                        const a = alertData[key];
+            
+            getGroupedData(products => {
+                for (const key in products) {
+                    const p = products[key];
+                    for (const date in p.dates) {
+                        const count = p.dates[date].length;
+                        const diff = Math.ceil((new Date(date) - today) / (1000 * 60 * 60 * 24));
                         let style = ""; let txt = "";
-                        if (a.diff < 0) { style = "alert-vencido"; txt = t.expired; }
-                        else if (a.diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
-                        else if (a.diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
-                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${a.name}', '${a.barcode || ""}', '${a.expiry}')">
-                            <b>${txt} (${a.count} ${t.units})</b><br><span>${a.name}</span><br><small>${a.expiry}</small></div>`;
+                        if (diff < 0) { style = "alert-vencido"; txt = t.expired; }
+                        else if (diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
+                        else if (diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
+                        if (style) {
+                            list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
+                                <b>${txt} (${count} ${t.units})</b><br><span>${p.name}</span><br><small>${date}</small></div>`;
+                        }
                     }
-                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${t.noAlerts}</p>`;
                 }
-            };
+            });
         }
 
         function showView(id) {
@@ -438,17 +449,31 @@
             });
         }
 
+        // --- EXPORTAR A EXCEL (AGRUPADO) ---
         function exportToExcel() {
-            const tx = db.transaction("inventory", "readonly");
-            tx.objectStore("inventory").getAll().onsuccess = e => {
-                const data = e.target.result.map(i => ({ "Producto": i.name, "Código": i.barcode, "Vencimiento": i.expiry, "Fecha Compra": i.date, "Foto_Base64": i.photo }));
-                const ws = XLSX.utils.json_to_sheet(data);
+            getGroupedData(products => {
+                const excelData = [];
+                for (const key in products) {
+                    const p = products[key];
+                    for (const date in p.dates) {
+                        excelData.push({
+                            "Producto": p.name,
+                            "Código": p.barcode || "",
+                            "Vencimiento": date,
+                            "Cantidad": p.dates[date].length,
+                            "Fecha Compra": p.dates[date][0].date,
+                            "Foto_Base64": p.photo
+                        });
+                    }
+                }
+                const ws = XLSX.utils.json_to_sheet(excelData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-                XLSX.writeFile(wb, "backup_despensa_excel.xlsx");
-            };
+                XLSX.writeFile(wb, `Inventario_Despensa_${new Date().toISOString().split('T')[0]}.xlsx`);
+            });
         }
 
+        // --- IMPORTAR DESDE EXCEL (LEE CANTIDAD) ---
         function importFromExcel(event) {
             const file = event.target.files[0];
             const reader = new FileReader();
@@ -457,83 +482,71 @@
                 const workbook = XLSX.read(data, {type: 'array'});
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                
                 json.forEach(row => {
-                    const item = { name: row["Producto"], barcode: row["Código"] || "", expiry: row["Vencimiento"], date: row["Fecha Compra"], photo: row["Foto_Base64"] || PLACEHOLDER };
-                    tx.objectStore("inventory").add(item);
+                    const qty = parseInt(row["Cantidad"]) || 1;
+                    const item = { 
+                        name: row["Producto"], 
+                        barcode: String(row["Código"] || ""), 
+                        expiry: row["Vencimiento"], 
+                        date: row["Fecha Compra"] || new Date().toLocaleDateString(), 
+                        photo: row["Foto_Base64"] || PLACEHOLDER 
+                    };
+                    
+                    // Agregar tantas unidades como diga el Excel
+                    for(let i=0; i<qty; i++) {
+                        tx.objectStore("inventory").add({...item});
+                    }
                     tx.objectStore("product_master").put({barcode: item.barcode, name: item.name, photo: item.photo});
                 });
-                tx.oncomplete = () => { Swal.fire("Importado", "", "success"); renderInventory(); };
+                tx.oncomplete = () => { Swal.fire("Importado con éxito", "", "success"); renderInventory(); };
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // --- REPORTE PDF FORMAL Y AGRUPADO ---
         async function generatePDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-
-            doc.setFontSize(20);
-            doc.setTextColor(46, 125, 50);
             doc.text(t.pdf.title, 14, 20);
-            
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 28);
 
-            const tx = db.transaction("inventory", "readonly");
-            tx.objectStore("inventory").getAll().onsuccess = e => {
-                const items = e.target.result;
-                
-                // Agrupar por producto y fecha para el PDF
-                const grouped = {};
-                items.forEach(i => {
-                    const key = (i.barcode || i.name) + i.expiry;
-                    if (!grouped[key]) {
-                        grouped[key] = { ...i, qty: 0 };
+            getGroupedData(products => {
+                const finalData = [];
+                for (const key in products) {
+                    const p = products[key];
+                    for (const date in p.dates) {
+                        finalData.push({ ...p, expiry: date, qty: p.dates[date].length });
                     }
-                    grouped[key].qty++;
-                });
+                }
 
-                // Convertir a array y ordenar: Vencidos primero, luego por fecha
-                const finalData = Object.values(grouped).sort((a, b) => {
-                    const isAExpired = new Date(a.expiry) < today;
-                    const isBExpired = new Date(b.expiry) < today;
-                    if (isAExpired && !isBExpired) return -1;
-                    if (!isAExpired && isBExpired) return 1;
+                // Ordenar: Vencidos primero
+                finalData.sort((a,b) => {
+                    const isAExp = new Date(a.expiry) < today;
+                    const isBExp = new Date(b.expiry) < today;
+                    if(isAExp && !isBExp) return -1;
+                    if(!isAExp && isBExp) return 1;
                     return new Date(a.expiry) - new Date(b.expiry);
                 });
 
-                const tableBody = finalData.map(i => {
-                    const isExpired = new Date(i.expiry) < today;
-                    return [
-                        i.name,
-                        i.barcode || "-",
-                        i.expiry,
-                        i.qty,
-                        isExpired ? t.pdf.expired : t.pdf.ok
-                    ];
-                });
+                const body = finalData.map(i => [
+                    i.name, i.barcode || "-", i.expiry, i.qty, new Date(i.expiry) < today ? t.pdf.expired : t.pdf.ok
+                ]);
 
                 doc.autoTable({
-                    startY: 35,
+                    startY: 30,
                     head: [[t.pdf.product, t.pdf.barcode, t.pdf.expiry, t.pdf.qty, t.pdf.status]],
-                    body: tableBody,
-                    theme: 'striped',
+                    body: body,
                     headStyles: { fillColor: [46, 125, 50] },
                     didParseCell: function(data) {
-                        // Resaltar productos vencidos en Rojo
                         if (data.row.raw && data.row.raw[4] === t.pdf.expired) {
                             data.cell.styles.textColor = [211, 47, 47];
                             data.cell.styles.fillColor = [255, 235, 238];
-                            data.cell.styles.fontStyle = 'bold';
                         }
                     }
                 });
-
-                doc.save(`Reporte_Inventario_${new Date().toISOString().split('T')[0]}.pdf`);
-            };
+                doc.save("Reporte_Despensa.pdf");
+            });
         }
 
         async function fetchProductInfo(barcode) {
