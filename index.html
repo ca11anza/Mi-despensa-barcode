@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v10 - Ultra Rápida</title>
+    <title>Despensa Pro v11 - Fixed & Fast</title>
     <link rel="manifest" href="manifest.json">
     
-    <!-- Librerías de Terceros (CDN de alto rendimiento) -->
+    <!-- Librerías Externas -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
@@ -19,41 +19,31 @@
         :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; --warning-5d: #fdd835; --warning-3d: #fb8c00; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; overscroll-behavior: contain; }
         .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; height: 50px; }
-        
         .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
-        
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
         .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; }
         .card-header { display: flex; align-items: center; gap: 15px; cursor: pointer; }
         .badge-count { background: var(--primary); color: white; border-radius: 20px; padding: 2px 10px; font-size: 0.8rem; margin-left: auto; }
-        
         .submenu-dates { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; display: none; flex-direction: column; gap: 8px; }
         .submenu-dates.active { display: flex; }
         .date-btn { background: #f0f0f0; border: none; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem; cursor: pointer; border-left: 5px solid #ccc; }
-        
         .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; font-weight: bold; cursor: pointer; }
         .btn-ocr { background: var(--info); color: white; border: none; padding: 10px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; }
         .btn-barcode { background: #1565c0; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
-        
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
-        
         .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; margin-bottom: 10px; }
         .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
         .alert-5dias { border-left-color: var(--warning-5d) !important; background: #fffde7 !important; }
-
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; z-index: 100; }
         .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; cursor: pointer; }
         .nav-item.active { color: var(--primary); font-weight: bold; }
         .nav-item i { font-size: 1.3rem; margin-bottom: 3px; }
-
         input, textarea, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
         label { display: block; margin-top: 12px; font-weight: bold; font-size: 0.85rem; color: #444; }
-        
         #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 1000; }
         #reader { width: 100%; height: 80%; }
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
@@ -148,7 +138,7 @@
                 missingData: "Faltan Datos", missingDataTxt: "Nombre, Fecha y Foto son requeridos.",
                 qty: "Cantidad:", expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO",
                 expires5: "⏳ POR VENCER", units: "unid.", toolsTitle: "Herramientas",
-                expExcel: "Exportar Excel", impExcel: "Importar Excel", genPdf: "Reporte PDF",
+                expExcel: "Exportar Excel", impExcel: "Importar Excel", genPdf: "Reporte PDF", available: "Disponibles", removeQty: "Cant. a borrar",
                 details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" }
             },
             en: {
@@ -161,7 +151,7 @@
                 missingData: "Missing Data", missingDataTxt: "Name, Date and Photo are required.",
                 qty: "Quantity:", expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON",
                 expires5: "⏳ NEAR EXPIRY", units: "units", toolsTitle: "Tools",
-                expExcel: "Export Excel", impExcel: "Import Excel", genPdf: "PDF Report",
+                expExcel: "Export Excel", impExcel: "Import Excel", genPdf: "PDF Report", available: "Available", removeQty: "Qty to delete",
                 details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" }
             }
         };
@@ -225,7 +215,7 @@
                     canvas.width = MAX_WIDTH;
                     canvas.height = img.height * scaleSize;
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Comprimir al 70% calidad
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); 
                 };
             });
         }
@@ -300,6 +290,7 @@
             document.getElementById('expiryDate').value = '';
             document.getElementById('regQty').value = '1';
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
+            document.getElementById('photo-input').value = ''; // Esto limpia el nombre del archivo en el boton
         }
 
         function renderInventory() {
@@ -313,8 +304,8 @@
                 const c = e.target.result;
                 if (c) {
                     const item = c.value;
-                    const key = item.barcode || item.name;
-                    if (!products[key]) products[key] = { name: item.name, photo: item.photo, dates: {} };
+                    const key = (item.barcode || item.name).trim();
+                    if (!products[key]) products[key] = { name: item.name, barcode: item.barcode, photo: item.photo, dates: {} };
                     if (!products[key].dates[item.expiry]) products[key].dates[item.expiry] = [];
                     products[key].dates[item.expiry].push(item);
                     c.continue();
@@ -331,20 +322,23 @@
                             if (diff < 0) style = "alert-vencido";
                             else if (diff <= 3) style = "alert-3dias";
                             else if (diff <= 5) style = "alert-5dias";
-                            submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${key}', '${date}')">
+                            submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
                                 <span>${date}</span><b>${count} ${t.units}</b></button>`;
                         }
                         list.innerHTML += `<div class="card">
-                            <div class="card-header" onclick="toggleSubmenu('${key}')">
+                            <div class="card-header" onclick="toggleSubmenu('${key.replace(/\s+/g, '')}')">
                                 <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px; background:#eee;">
                                 <div><strong>${p.name}</strong></div><span class="badge-count">${total}</span>
-                            </div><div id="submenu-${key}" class="submenu-dates">${submenu}</div></div>`;
+                            </div><div id="submenu-${key.replace(/\s+/g, '')}" class="submenu-dates">${submenu}</div></div>`;
                     }
                 }
             };
         }
 
-        function toggleSubmenu(key) { document.getElementById(`submenu-${key}`).classList.toggle('active'); }
+        function toggleSubmenu(key) { 
+            const el = document.getElementById(`submenu-${key}`);
+            if(el) el.classList.toggle('active');
+        }
 
         function openDetail(name, barcode, expiry) {
             const t = i18n[currentLang];
@@ -354,7 +348,7 @@
                 const c = e.target.result;
                 if (c) {
                     const i = c.value;
-                    if (i.name === name && (i.barcode === barcode || (!i.barcode && !barcode)) && i.expiry === expiry) matches.push(i);
+                    if (i.name === name && (i.barcode || "") === barcode && i.expiry === expiry) matches.push(i);
                     c.continue();
                 } else {
                     const p = matches[0];
@@ -364,7 +358,7 @@
                         <h2>${p.name}</h2>
                         <p><b>${t.available}:</b> ${count}</p>
                         <p><b>${t.details.expiry}:</b> ${p.expiry}</p>
-                        <div class="qty-row"><span>Eliminar:</span><input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;"></div>
+                        <div class="qty-row"><span>${t.removeQty}:</span><input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;"></div>
                         <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">${t.details.delete}</button>`;
                     showView('detail');
                 }
@@ -380,7 +374,7 @@
                 const c = e.target.result;
                 if (c && del < qty) {
                     const i = c.value;
-                    if (i.name === name && (i.barcode === barcode || (!i.barcode && !barcode)) && i.expiry === expiry) {
+                    if (i.name === name && (i.barcode || "") === barcode && i.expiry === expiry) {
                         store.delete(c.key); del++;
                     }
                     c.continue();
@@ -413,7 +407,7 @@
                         if (a.diff < 0) { style = "alert-vencido"; txt = t.expired; }
                         else if (a.diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
                         else if (a.diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
-                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${a.name}', '${a.barcode}', '${a.expiry}')">
+                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${a.name}', '${a.barcode || ""}', '${a.expiry}')">
                             <b>${txt} (${a.count} ${t.units})</b><br><span>${a.name}</span><br><small>${a.expiry}</small></div>`;
                     }
                 }
@@ -495,16 +489,17 @@
                 return;
             }
             try {
+                // Buscamos info en OpenFoodFacts
                 const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
                 const d = await res.json();
                 if (d.status === 1) {
                     document.getElementById('notes').value = d.product.product_name || "";
                     if(d.product.image_url) {
-                        const comp = await compressImage(d.product.image_url);
-                        document.getElementById('current-photo-preview').src = comp;
+                        // NO intentamos comprimir la URL externa para evitar errores de seguridad CORS
+                        document.getElementById('current-photo-preview').src = d.product.image_url;
                     }
                 }
-            } catch(e) {}
+            } catch(e) { console.error("Error API:", e); }
             document.getElementById('api-loading').style.display = 'none';
         }
 
