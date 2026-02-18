@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v11 - Fixed & Fast</title>
+    <title>Despensa Pro v12 - Reportes Avanzados</title>
     <link rel="manifest" href="manifest.json">
     
     <!-- Librerías Externas -->
@@ -111,7 +111,6 @@
         <div id="detail-content" class="card"></div>
     </section>
 
-    <!-- Herramientas Invisibles -->
     <input type="file" id="import-excel-input" style="display:none" accept=".xlsx, .xls" onchange="importFromExcel(event)">
     <canvas id="compress-canvas" style="display:none;"></canvas>
 
@@ -139,7 +138,8 @@
                 qty: "Cantidad:", expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO",
                 expires5: "⏳ POR VENCER", units: "unid.", toolsTitle: "Herramientas",
                 expExcel: "Exportar Excel", impExcel: "Importar Excel", genPdf: "Reporte PDF", available: "Disponibles", removeQty: "Cant. a borrar",
-                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" }
+                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" },
+                pdf: { product: "Producto", barcode: "Código", expiry: "Vencimiento", qty: "Cant.", status: "Estado", expired: "VENCIDO", ok: "OK", title: "Reporte de Inventario" }
             },
             en: {
                 appTitle: "My Pantry Pro", inventoryTitle: "My Inventory", addTitle: "Register Purchase",
@@ -152,7 +152,8 @@
                 qty: "Quantity:", expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON",
                 expires5: "⏳ NEAR EXPIRY", units: "units", toolsTitle: "Tools",
                 expExcel: "Export Excel", impExcel: "Import Excel", genPdf: "PDF Report", available: "Available", removeQty: "Qty to delete",
-                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" }
+                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" },
+                pdf: { product: "Product", barcode: "Barcode", expiry: "Expiry", qty: "Qty", status: "Status", expired: "EXPIRED", ok: "OK", title: "Inventory Report" }
             }
         };
 
@@ -202,7 +203,6 @@
             };
         }
 
-        // --- COMPRESIÓN DE IMAGEN ---
         async function compressImage(base64Str) {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -290,7 +290,7 @@
             document.getElementById('expiryDate').value = '';
             document.getElementById('regQty').value = '1';
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
-            document.getElementById('photo-input').value = ''; // Esto limpia el nombre del archivo en el boton
+            document.getElementById('photo-input').value = '';
         }
 
         function renderInventory() {
@@ -325,12 +325,14 @@
                             submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
                                 <span>${date}</span><b>${count} ${t.units}</b></button>`;
                         }
+                        const cleanKey = key.replace(/\s+/g, '');
                         list.innerHTML += `<div class="card">
-                            <div class="card-header" onclick="toggleSubmenu('${key.replace(/\s+/g, '')}')">
+                            <div class="card-header" onclick="toggleSubmenu('${cleanKey}')">
                                 <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px; background:#eee;">
                                 <div><strong>${p.name}</strong></div><span class="badge-count">${total}</span>
-                            </div><div id="submenu-${key.replace(/\s+/g, '')}" class="submenu-dates">${submenu}</div></div>`;
+                            </div><div id="submenu-${cleanKey}" class="submenu-dates">${submenu}</div></div>`;
                     }
+                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${t.emptyPantry}</p>`;
                 }
             };
         }
@@ -410,6 +412,7 @@
                         list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${a.name}', '${a.barcode || ""}', '${a.expiry}')">
                             <b>${txt} (${a.count} ${t.units})</b><br><span>${a.name}</span><br><small>${a.expiry}</small></div>`;
                     }
+                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${t.noAlerts}</p>`;
                 }
             };
         }
@@ -442,7 +445,7 @@
                 const ws = XLSX.utils.json_to_sheet(data);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-                XLSX.writeFile(wb, "Inventario_Despensa.xlsx");
+                XLSX.writeFile(wb, "backup_despensa_excel.xlsx");
             };
         }
 
@@ -464,17 +467,72 @@
             reader.readAsArrayBuffer(file);
         }
 
+        // --- REPORTE PDF FORMAL Y AGRUPADO ---
         async function generatePDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-            doc.text(t.appTitle, 14, 20);
+
+            doc.setFontSize(20);
+            doc.setTextColor(46, 125, 50);
+            doc.text(t.pdf.title, 14, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 28);
+
             const tx = db.transaction("inventory", "readonly");
             tx.objectStore("inventory").getAll().onsuccess = e => {
-                const body = e.target.result.sort((a,b) => new Date(a.expiry)-new Date(b.expiry)).map(i => [i.name, i.barcode, i.expiry, i.date, new Date(i.expiry)<today ? "VENCIDO" : "OK"]);
-                doc.autoTable({ startY: 30, head: [['Producto', 'Código', 'Vencimiento', 'Compra', 'Estado']], body: body });
-                doc.save("Reporte_Despensa.pdf");
+                const items = e.target.result;
+                
+                // Agrupar por producto y fecha para el PDF
+                const grouped = {};
+                items.forEach(i => {
+                    const key = (i.barcode || i.name) + i.expiry;
+                    if (!grouped[key]) {
+                        grouped[key] = { ...i, qty: 0 };
+                    }
+                    grouped[key].qty++;
+                });
+
+                // Convertir a array y ordenar: Vencidos primero, luego por fecha
+                const finalData = Object.values(grouped).sort((a, b) => {
+                    const isAExpired = new Date(a.expiry) < today;
+                    const isBExpired = new Date(b.expiry) < today;
+                    if (isAExpired && !isBExpired) return -1;
+                    if (!isAExpired && isBExpired) return 1;
+                    return new Date(a.expiry) - new Date(b.expiry);
+                });
+
+                const tableBody = finalData.map(i => {
+                    const isExpired = new Date(i.expiry) < today;
+                    return [
+                        i.name,
+                        i.barcode || "-",
+                        i.expiry,
+                        i.qty,
+                        isExpired ? t.pdf.expired : t.pdf.ok
+                    ];
+                });
+
+                doc.autoTable({
+                    startY: 35,
+                    head: [[t.pdf.product, t.pdf.barcode, t.pdf.expiry, t.pdf.qty, t.pdf.status]],
+                    body: tableBody,
+                    theme: 'striped',
+                    headStyles: { fillColor: [46, 125, 50] },
+                    didParseCell: function(data) {
+                        // Resaltar productos vencidos en Rojo
+                        if (data.row.raw && data.row.raw[4] === t.pdf.expired) {
+                            data.cell.styles.textColor = [211, 47, 47];
+                            data.cell.styles.fillColor = [255, 235, 238];
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+
+                doc.save(`Reporte_Inventario_${new Date().toISOString().split('T')[0]}.pdf`);
             };
         }
 
@@ -489,13 +547,11 @@
                 return;
             }
             try {
-                // Buscamos info en OpenFoodFacts
                 const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
                 const d = await res.json();
                 if (d.status === 1) {
                     document.getElementById('notes').value = d.product.product_name || "";
                     if(d.product.image_url) {
-                        // NO intentamos comprimir la URL externa para evitar errores de seguridad CORS
                         document.getElementById('current-photo-preview').src = d.product.image_url;
                     }
                 }
