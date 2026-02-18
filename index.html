@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v6 - Multi-lang</title>
+    <title>Despensa Pro v7 - Grupos</title>
     <link rel="manifest" href="manifest.json">
-    <!-- Librerías Externas -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
@@ -16,7 +15,6 @@
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
         .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
         
-        /* Selector de Idioma */
         .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
         .lang-select option { color: black; }
 
@@ -24,7 +22,16 @@
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        /* Estilos de Tarjeta Agrupada */
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden; }
+        .card-header { display: flex; align-items: center; gap: 15px; cursor: pointer; }
+        .badge-count { background: var(--primary); color: white; border-radius: 20px; padding: 2px 10px; font-size: 0.8rem; margin-left: auto; }
+        
+        /* Submenú de fechas */
+        .submenu-dates { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; display: none; flex-direction: column; gap: 8px; }
+        .submenu-dates.active { display: flex; }
+        .date-btn { background: #f0f0f0; border: none; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem; cursor: pointer; border-left: 5px solid #ccc; }
+        
         .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; font-weight: bold; cursor: pointer; }
         .btn-ocr { background: var(--info); color: white; border: none; padding: 10px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; }
         .btn-barcode { background: #1565c0; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
@@ -32,10 +39,9 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
-        .alert-item { cursor: pointer; border-radius: 12px; }
-        .alert-vencido { border-left: 8px solid var(--danger) !important; background: #ffebee !important; }
-        .alert-3dias { border-left: 8px solid var(--warning-3d) !important; background: #fff3e0 !important; }
-        .alert-5dias { border-left: 8px solid var(--warning-5d) !important; background: #fffde7 !important; }
+        .alert-vencido { border-left-color: var(--danger) !important; }
+        .alert-3dias { border-left-color: var(--warning-3d) !important; }
+        .alert-5dias { border-left-color: var(--warning-5d) !important; }
 
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; border-top: 1px solid #ddd; height: 65px; z-index: 100; }
         .nav-item { flex: 1; border: none; background: none; padding: 10px; color: #757575; display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; cursor: pointer; }
@@ -73,18 +79,15 @@
     <section id="view-add" class="view">
         <div class="card">
             <h3 id="txt-add-title">Registrar Compra</h3>
-            
             <label id="lbl-barcode">Código de Barras</label>
             <div style="display: flex; gap: 8px;">
                 <input type="text" id="barcode" placeholder="...">
                 <button class="btn-barcode" onclick="startScanner()"><i class="fas fa-barcode"></i></button>
             </div>
             <div id="api-loading">...</div>
-
             <label id="lbl-photo">Foto del Producto *</label>
             <img id="current-photo-preview" src="">
             <input type="file" id="photo-input" accept="image/*" capture="environment" style="margin-top:10px;">
-
             <label id="lbl-expiry">Fecha de Vencimiento *</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="date" id="expiryDate">
@@ -92,10 +95,8 @@
             </div>
             <input type="file" id="ocr-input" accept="image/*" capture="environment" style="display: none;">
             <div id="ocr-status">...</div>
-
             <label id="lbl-notes">Nombre / Notas *</label>
             <input type="text" id="notes" placeholder="...">
-            
             <button class="btn-main" onclick="saveProduct()" id="btn-save">GUARDAR EN BODEGA</button>
         </div>
     </section>
@@ -122,7 +123,6 @@
     </nav>
 
     <script>
-        // --- DICCIONARIO DE TRADUCCIONES ---
         const i18n = {
             es: {
                 appTitle: "Mi Despensa Pro",
@@ -148,12 +148,14 @@
                 saved: "Producto registrado",
                 missingData: "Faltan Datos",
                 missingDataTxt: "Asegúrate de poner Nombre, Fecha y tomar una Foto.",
-                deleteConfirm: "¿Eliminar?",
-                confirmBtn: "Sí",
+                deleteConfirm: "¿Eliminar una unidad?",
+                confirmBtn: "Sí, eliminar",
                 expired: "🚨 VENCIDO",
-                expires3: "⚠️ VENCE EN 3 DÍAS",
-                expires5: "⏳ VENCE EN 5 DÍAS",
-                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ DESECHAR" }
+                expires3: "⚠️ VENCE PRONTO",
+                expires5: "⏳ POR VENCER",
+                units: "unidades",
+                unit: "unidad",
+                details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR 1 UNIDAD" }
             },
             en: {
                 appTitle: "My Pantry Pro",
@@ -179,12 +181,14 @@
                 saved: "Product registered",
                 missingData: "Missing Data",
                 missingDataTxt: "Please ensure Name, Date and Photo are provided.",
-                deleteConfirm: "Delete?",
-                confirmBtn: "Yes",
+                deleteConfirm: "Remove one unit?",
+                confirmBtn: "Yes, delete",
                 expired: "🚨 EXPIRED",
-                expires3: "⚠️ EXPIRES IN 3 DAYS",
-                expires5: "⏳ EXPIRES IN 5 DAYS",
-                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ DISCARD" }
+                expires3: "⚠️ EXPIRING SOON",
+                expires5: "⏳ NEAR EXPIRY",
+                units: "units",
+                unit: "unit",
+                details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE 1 UNIT" }
             }
         };
 
@@ -220,7 +224,6 @@
             checkAlerts();
         }
 
-        // --- LÓGICA BASE DE DATOS Y FUNCIONALIDADES ---
         let db;
         const html5QrCode = new Html5Qrcode("reader");
         const PLACEHOLDER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -241,7 +244,6 @@
             request.onsuccess = e => { db = e.target.result; renderInventory(); };
         }
 
-        // Lógica de Foto Manual
         document.getElementById('photo-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -251,7 +253,6 @@
             }
         });
 
-        // Lógica OCR
         document.getElementById('ocr-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -262,10 +263,7 @@
                     try {
                         const result = await Tesseract.recognize(event.target.result, 'eng+spa');
                         const detectedDate = parseDateFromText(result.data.text);
-                        if (detectedDate) {
-                            document.getElementById('expiryDate').value = detectedDate;
-                            Swal.fire(i18n[currentLang].success, detectedDate, 'success');
-                        }
+                        if (detectedDate) document.getElementById('expiryDate').value = detectedDate;
                     } catch (err) { console.error(err); }
                     status.style.display = 'none';
                 };
@@ -287,30 +285,6 @@
                 }
             }
             return null;
-        }
-
-        async function fetchProductInfo(barcode) {
-            document.getElementById('api-loading').style.display = 'block';
-            const tx = db.transaction("product_master", "readonly");
-            const local = await new Promise(r => { 
-                const g = tx.objectStore("product_master").get(barcode); 
-                g.onsuccess = () => r(g.result); 
-            });
-            if (local) {
-                document.getElementById('notes').value = local.name;
-                document.getElementById('current-photo-preview').src = local.photo;
-                document.getElementById('api-loading').style.display = 'none';
-                return;
-            }
-            try {
-                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-                const d = await res.json();
-                if (d.status === 1) {
-                    document.getElementById('notes').value = d.product.product_name || "";
-                    if(d.product.image_url) document.getElementById('current-photo-preview').src = d.product.image_url;
-                }
-            } catch(e) {}
-            document.getElementById('api-loading').style.display = 'none';
         }
 
         function saveProduct() {
@@ -342,26 +316,78 @@
             document.getElementById('photo-input').value = '';
         }
 
+        // --- LÓGICA DE RENDERIZADO AGRUPADO ---
         function renderInventory() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = "";
             if (!db) return;
             const texts = i18n[currentLang];
+
+            const products = {};
+
             db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
-                    list.innerHTML += `
-                        <div class="card" onclick="openDetail(${c.value.id})">
-                            <div style="display:flex; gap:12px; align-items:center;">
-                                <img src="${c.value.photo}" style="width:55px; height:55px; object-fit:cover; border-radius:8px;">
-                                <div><strong>${c.value.name}</strong><br><small>📅 ${texts.details.expiry}: ${c.value.expiry}</small></div>
-                            </div>
-                        </div>`;
+                    const item = c.value;
+                    const key = item.barcode || item.name;
+                    if (!products[key]) {
+                        products[key] = { name: item.name, photo: item.photo, dates: {} };
+                    }
+                    if (!products[key].dates[item.expiry]) {
+                        products[key].dates[item.expiry] = [];
+                    }
+                    products[key].dates[item.expiry].push(item);
                     c.continue();
-                } else if (list.innerHTML === "") {
-                    list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
+                } else {
+                    // Dibujar interfaz agrupada
+                    for (const key in products) {
+                        const p = products[key];
+                        let totalCount = 0;
+                        let submenuHtml = "";
+                        
+                        // Ordenar fechas para que la más próxima salga primero
+                        const sortedDates = Object.keys(p.dates).sort();
+
+                        for (const date of sortedDates) {
+                            const count = p.dates[date].length;
+                            totalCount += count;
+                            
+                            // Determinar color de alerta en el botón de fecha
+                            const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+                            let dateStyle = "";
+                            if (diff < 0) dateStyle = "alert-vencido";
+                            else if (diff <= 3) dateStyle = "alert-3dias";
+                            else if (diff <= 5) dateStyle = "alert-5dias";
+
+                            submenuHtml += `
+                                <button class="date-btn ${dateStyle}" onclick="openDetail(${p.dates[date][0].id})">
+                                    <span>${date}</span>
+                                    <b>${count} ${count > 1 ? texts.units : texts.unit}</b>
+                                </button>`;
+                        }
+
+                        list.innerHTML += `
+                            <div class="card">
+                                <div class="card-header" onclick="toggleSubmenu('${key}')">
+                                    <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
+                                    <div>
+                                        <strong>${p.name}</strong>
+                                    </div>
+                                    <span class="badge-count">${totalCount}</span>
+                                </div>
+                                <div id="submenu-${key}" class="submenu-dates">
+                                    ${submenuHtml}
+                                </div>
+                            </div>`;
+                    }
+                    if (list.innerHTML === "") list.innerHTML = `<p style='text-align:center; color:#888;'>${texts.emptyPantry}</p>`;
                 }
             };
+        }
+
+        function toggleSubmenu(key) {
+            const el = document.getElementById(`submenu-${key}`);
+            el.classList.toggle('active');
         }
 
         function openDetail(id) {
@@ -409,7 +435,7 @@
 
                     if (alertClass !== "") {
                         list.innerHTML += `
-                            <div class="card alert-item ${alertClass}" onclick="openDetail(${p.id})">
+                            <div class="card alert-item ${alertClass}" onclick="openDetail(${p.id})" style="border-left: 8px solid #ccc;">
                                 <b style="font-size: 0.75rem;">${alertText}</b><br>
                                 <span style="font-size: 1.1rem; font-weight: bold;">${p.name}</span><br>
                                 <small>${texts.details.expiry}: ${p.expiry}</small>
@@ -460,6 +486,30 @@
                 tx.oncomplete = () => { Swal.fire(i18n[currentLang].success, '', 'success'); renderInventory(); };
             };
             reader.readAsText(file);
+        }
+
+        async function fetchProductInfo(barcode) {
+            document.getElementById('api-loading').style.display = 'block';
+            const tx = db.transaction("product_master", "readonly");
+            const local = await new Promise(r => { 
+                const g = tx.objectStore("product_master").get(barcode); 
+                g.onsuccess = () => r(g.result); 
+            });
+            if (local) {
+                document.getElementById('notes').value = local.name;
+                document.getElementById('current-photo-preview').src = local.photo;
+                document.getElementById('api-loading').style.display = 'none';
+                return;
+            }
+            try {
+                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+                const d = await res.json();
+                if (d.status === 1) {
+                    document.getElementById('notes').value = d.product.product_name || "";
+                    if(d.product.image_url) document.getElementById('current-photo-preview').src = d.product.image_url;
+                }
+            } catch(e) {}
+            document.getElementById('api-loading').style.display = 'none';
         }
 
         function startScanner() {
