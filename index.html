@@ -3,19 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v14 - Excel Fixed</title>
+    <title>Despensa Pro v16 - Auto-Recovery</title>
     <link rel="manifest" href="manifest.json">
     
     <!-- Librerías Externas -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
-    <!-- Excel Support (Versión estable) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- PDF Support -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
@@ -114,7 +111,6 @@
         <div id="detail-content" class="card"></div>
     </section>
 
-    <!-- Herramientas Invisibles -->
     <input type="file" id="import-excel-input" style="display:none" accept=".xlsx, .xls" onchange="importFromExcel(event)">
     <canvas id="compress-canvas" style="display:none;"></canvas>
 
@@ -207,7 +203,7 @@
             };
         }
 
-        // COMPRESIÓN IMAGEN
+        // --- COMPRESIÓN DE IMAGEN ---
         async function compressImage(base64Str) {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -236,7 +232,6 @@
             }
         });
 
-        // OCR Y BARRAS
         document.getElementById('ocr-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -261,13 +256,15 @@
                 const m = text.match(r);
                 if (m) {
                     if (m.length === 3) return `${m[2].length === 2 ? "20"+m[2] : m[2]}-${m[1]}-01`;
-                    if (m.length === 4) return `${m[3].length === 2 ? "20"+m[3] : m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+                    if (m.length === 4) {
+                        const y = match[3].length === 2 ? "20"+match[3] : match[3];
+                        return `${y}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
+                    }
                 }
             }
             return null;
         }
 
-        // GUARDADO
         async function saveProduct() {
             const barcode = document.getElementById('barcode').value;
             const name = document.getElementById('notes').value;
@@ -279,7 +276,10 @@
             const tx = db.transaction(["inventory", "product_master"], "readwrite");
             for(let i=0; i<qty; i++) { tx.objectStore("inventory").add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() }); }
             tx.objectStore("product_master").put({ barcode, name, photo });
-            tx.oncomplete = () => { Swal.fire(t.success, t.saved, 'success'); limpiar(); renderInventory(); };
+            tx.oncomplete = () => {
+                Swal.fire(t.success, t.saved, 'success');
+                limpiar(); renderInventory();
+            };
         }
 
         function limpiar() {
@@ -291,7 +291,6 @@
             document.getElementById('photo-input').value = '';
         }
 
-        // LÓGICA DE AGRUPACIÓN
         function getGroupedData(callback) {
             const products = {};
             const tx = db.transaction("inventory", "readonly");
@@ -308,11 +307,9 @@
             };
         }
 
-        // EXCEL EXPORT (INDIVIDUALIZADO PARA EVITAR FALLOS)
         function exportToExcel() {
             if (!db) return;
             Swal.fire({ title: 'Exportando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
-
             getGroupedData(products => {
                 const excelData = [];
                 for (const key in products) {
@@ -323,24 +320,21 @@
                             "Código": p.barcode || "",
                             "Vencimiento": date,
                             "Cantidad": p.dates[date].length,
-                            "Fecha Compra": p.dates[date][0].date,
-                            "Foto_Base64": p.photo
+                            "Fecha Compra": p.dates[date][0].date
                         });
                     }
                 }
-
                 try {
                     const ws = XLSX.utils.json_to_sheet(excelData);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Inventario");
                     XLSX.writeFile(wb, `Inventario_Despensa.xlsx`);
                     Swal.close();
-                } catch (err) {
-                    Swal.fire('Error', 'No se pudo generar el archivo Excel.', 'error');
-                }
+                } catch (err) { Swal.fire('Error', 'No se pudo generar el archivo Excel.', 'error'); }
             });
         }
 
+        // --- IMPORTACIÓN CON AUTO-RECUPERACIÓN DE FOTOS ---
         function importFromExcel(event) {
             const file = event.target.files[0];
             const reader = new FileReader();
@@ -349,24 +343,71 @@
                 const workbook = XLSX.read(data, {type: 'array'});
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                 const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                
                 json.forEach(row => {
                     const qty = parseInt(row["Cantidad"]) || 1;
-                    const item = { name: row["Producto"], barcode: String(row["Código"] || ""), expiry: row["Vencimiento"], date: row["Fecha Compra"] || new Date().toLocaleDateString(), photo: row["Foto_Base64"] || PLACEHOLDER };
+                    const barcode = String(row["Código"] || "").trim();
+                    const item = { 
+                        name: row["Producto"], 
+                        barcode: barcode, 
+                        expiry: row["Vencimiento"], 
+                        date: row["Fecha Compra"] || new Date().toLocaleDateString(), 
+                        photo: PLACEHOLDER 
+                    };
                     for(let i=0; i<qty; i++) { tx.objectStore("inventory").add({...item}); }
-                    tx.objectStore("product_master").put({barcode: item.barcode, name: item.name, photo: item.photo});
+                    
+                    // Si hay código, intentar recuperar foto de internet en segundo plano
+                    if(barcode && barcode !== "") {
+                        silentFetchPhoto(barcode);
+                    }
                 });
-                tx.oncomplete = () => { Swal.fire("Importado", "", "success"); renderInventory(); };
+                tx.oncomplete = () => { 
+                    Swal.fire("Importado", "Recuperando fotos de internet en segundo plano...", "success"); 
+                    renderInventory(); 
+                };
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // PDF REPORT
+        async function silentFetchPhoto(barcode) {
+            try {
+                const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+                const d = await res.json();
+                if (d.status === 1 && d.product.image_url) {
+                    const photoUrl = d.product.image_url;
+                    const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                    
+                    // Actualizar memoria maestra
+                    tx.objectStore("product_master").put({
+                        barcode: barcode, 
+                        name: d.product.product_name || "Producto", 
+                        photo: photoUrl
+                    });
+
+                    // Actualizar todos los productos en inventario con este código que no tengan foto
+                    const store = tx.objectStore("inventory");
+                    store.openCursor().onsuccess = e => {
+                        const cursor = e.target.result;
+                        if(cursor) {
+                            if(cursor.value.barcode === barcode && cursor.value.photo === PLACEHOLDER) {
+                                const updateData = cursor.value;
+                                updateData.photo = photoUrl;
+                                cursor.update(updateData);
+                            }
+                            cursor.continue();
+                        } else {
+                            renderInventory(); // Refrescar UI al terminar
+                        }
+                    };
+                }
+            } catch(e) { console.log("Silent fetch failed for " + barcode); }
+        }
+
         async function generatePDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-            
             getGroupedData(products => {
                 const finalData = [];
                 for (const key in products) {
@@ -389,7 +430,6 @@
             });
         }
 
-        // RENDER UI
         function renderInventory() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = ""; if (!db) return;
@@ -405,7 +445,7 @@
                         const diff = Math.ceil((new Date(date) - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
                         let style = "";
                         if (diff < 0) style = "alert-vencido"; else if (diff <= 3) style = "alert-3dias"; else if (diff <= 5) style = "alert-5dias";
-                        submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
+                        submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name.replace(/'/g, "\\'")}', '${p.barcode || ""}', '${date}')">
                             <span>${date}</span><b>${count} ${t.units}</b></button>`;
                     }
                     const cleanId = key.replace(/[^a-z0-9]/gi, '');
@@ -438,7 +478,7 @@
                         <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
                         <h2>${p.name}</h2><p><b>${t.available}:</b> ${count}</p><p><b>${t.details.expiry}:</b> ${p.expiry}</p>
                         <div class="qty-row"><span>${t.removeQty}:</span><input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;"></div>
-                        <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">${t.details.delete}</button>`;
+                        <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name.replace(/'/g, "\\'")}', '${barcode}', '${expiry}')">${t.details.delete}</button>`;
                     showView('detail');
                 }
             };
@@ -473,7 +513,7 @@
                         else if (diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
                         else if (diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
                         if (style) {
-                            list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${p.name}', '${p.barcode || ""}', '${date}')">
+                            list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${p.name.replace(/'/g, "\\'")}', '${p.barcode || ""}', '${date}')">
                                 <b>${txt} (${count} ${t.units})</b><br><span>${p.name}</span><br><small>${date}</small></div>`;
                         }
                     }
