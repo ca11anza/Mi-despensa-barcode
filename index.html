@@ -3,25 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v9 - Reportes & Excel</title>
+    <title>Despensa Pro v10 - Ultra Rápida</title>
     <link rel="manifest" href="manifest.json">
     
-    <!-- Librerías de Terceros -->
+    <!-- Librerías de Terceros (CDN de alto rendimiento) -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://unpkg.com/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
-    <!-- Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <!-- PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <style>
         :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; --warning-5d: #fdd835; --warning-3d: #fb8c00; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; }
-        .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; overscroll-behavior: contain; }
+        .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; height: 50px; }
         
         .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
         
@@ -44,7 +41,7 @@
         #current-photo-preview { width: 100%; max-height: 200px; object-fit: contain; background: #eee; border-radius: 10px; margin-top: 10px; border: 1px solid #ddd; display: block; min-height: 100px; }
         #ocr-status { display: none; color: var(--info); font-weight: bold; text-align: center; margin-top: 5px; font-size: 0.8rem; }
         
-        .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; }
+        .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; margin-bottom: 10px; }
         .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
         .alert-5dias { border-left-color: var(--warning-5d) !important; background: #fffde7 !important; }
@@ -60,7 +57,6 @@
         #scanner-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 1000; }
         #reader { width: 100%; height: 80%; }
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
-        
         .qty-row { display: flex; align-items: center; gap: 10px; background: #e8f5e9; padding: 10px; border-radius: 10px; margin-top: 10px; }
     </style>
 </head>
@@ -104,7 +100,7 @@
             <div id="ocr-status">...</div>
 
             <div class="qty-row">
-                <label id="lbl-qty" style="margin:0; flex:1;">Cantidad de unidades:</label>
+                <label id="lbl-qty" style="margin:0; flex:1;">Cantidad:</label>
                 <input type="number" id="regQty" value="1" min="1" style="width:70px; margin:0;">
             </div>
 
@@ -125,8 +121,9 @@
         <div id="detail-content" class="card"></div>
     </section>
 
-    <!-- HERRAMIENTAS OCULTAS -->
+    <!-- Herramientas Invisibles -->
     <input type="file" id="import-excel-input" style="display:none" accept=".xlsx, .xls" onchange="importFromExcel(event)">
+    <canvas id="compress-canvas" style="display:none;"></canvas>
 
     <div id="scanner-container">
         <div id="reader"></div>
@@ -146,12 +143,12 @@
                 barcode: "Código de Barras", photo: "Foto del Producto *", expiry: "Fecha de Vencimiento *",
                 read: "Leer", notes: "Nombre / Notas *", save: "GUARDAR EN BODEGA", alertsTitle: "Alertas de Vencimiento",
                 back: "VOLVER", cancelScan: "CANCELAR", navHome: "Bodega", navAdd: "Agregar", navAlerts: "Alertas",
-                emptyPantry: "Bodega vacía", noAlerts: "No hay alertas próximas", searchApi: "Buscando en internet...",
+                emptyPantry: "Bodega vacía", noAlerts: "No hay alertas próximas", searchApi: "Buscando...",
                 ocrStatus: "Analizando fecha...", success: "¡Éxito!", saved: "Producto registrado",
                 missingData: "Faltan Datos", missingDataTxt: "Nombre, Fecha y Foto son requeridos.",
-                qty: "Cantidad de unidades:", expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO",
+                qty: "Cantidad:", expired: "🚨 VENCIDO", expires3: "⚠️ VENCE PRONTO",
                 expires5: "⏳ POR VENCER", units: "unid.", toolsTitle: "Herramientas",
-                expExcel: "Exportar a Excel", impExcel: "Importar desde Excel", genPdf: "Generar Reporte PDF",
+                expExcel: "Exportar Excel", impExcel: "Importar Excel", genPdf: "Reporte PDF",
                 details: { code: "Código", buy: "Compra", expiry: "Vencimiento", delete: "🗑️ ELIMINAR SELECCIONADOS" }
             },
             en: {
@@ -159,12 +156,12 @@
                 barcode: "Barcode", photo: "Product Photo *", expiry: "Expiry Date *",
                 read: "Scan", notes: "Name / Notes *", save: "SAVE TO PANTRY", alertsTitle: "Expiry Alerts",
                 back: "BACK", cancelScan: "CANCEL", navHome: "Pantry", navAdd: "Add", navAlerts: "Alerts",
-                emptyPantry: "Pantry is empty", noAlerts: "No upcoming alerts", searchApi: "Searching online...",
+                emptyPantry: "Pantry is empty", noAlerts: "No upcoming alerts", searchApi: "Searching...",
                 ocrStatus: "Analyzing date...", success: "Success!", saved: "Product registered",
                 missingData: "Missing Data", missingDataTxt: "Name, Date and Photo are required.",
-                qty: "Unit quantity:", expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON",
+                qty: "Quantity:", expired: "🚨 EXPIRED", expires3: "⚠️ EXPIRING SOON",
                 expires5: "⏳ NEAR EXPIRY", units: "units", toolsTitle: "Tools",
-                expExcel: "Export to Excel", impExcel: "Import from Excel", genPdf: "Generate PDF Report",
+                expExcel: "Export Excel", impExcel: "Import Excel", genPdf: "PDF Report",
                 details: { code: "Code", buy: "Bought", expiry: "Expiry", delete: "🗑️ REMOVE SELECTED" }
             }
         };
@@ -215,21 +212,41 @@
             };
         }
 
-        // FOTOS Y OCR
-        document.getElementById('photo-input').addEventListener('change', function(e) {
+        // --- COMPRESIÓN DE IMAGEN ---
+        async function compressImage(base64Str) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = base64Str;
+                img.onload = () => {
+                    const canvas = document.getElementById('compress-canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX_WIDTH = 800;
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); // Comprimir al 70% calidad
+                };
+            });
+        }
+
+        document.getElementById('photo-input').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (file) {
-                const r = new FileReader();
-                r.onload = ev => document.getElementById('current-photo-preview').src = ev.target.result;
-                r.readAsDataURL(file);
+                const reader = new FileReader();
+                reader.onload = async ev => {
+                    const compressed = await compressImage(ev.target.result);
+                    document.getElementById('current-photo-preview').src = compressed;
+                };
+                reader.readAsDataURL(file);
             }
         });
 
         document.getElementById('ocr-input').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
-                const r = new FileReader();
-                r.onload = async function(event) {
+                const reader = new FileReader();
+                reader.onload = async function(event) {
                     document.getElementById('ocr-status').style.display = 'block';
                     try {
                         const res = await Tesseract.recognize(event.target.result, 'eng+spa');
@@ -238,7 +255,7 @@
                     } catch (err) { console.error(err); }
                     document.getElementById('ocr-status').style.display = 'none';
                 };
-                r.readAsDataURL(file);
+                reader.readAsDataURL(file);
             }
         });
 
@@ -255,8 +272,7 @@
             return null;
         }
 
-        // GUARDADO
-        function saveProduct() {
+        async function saveProduct() {
             const barcode = document.getElementById('barcode').value;
             const name = document.getElementById('notes').value;
             const expiry = document.getElementById('expiryDate').value;
@@ -267,13 +283,10 @@
             if (!name || !expiry || photo === PLACEHOLDER) return Swal.fire(t.missingData, t.missingDataTxt, 'warning');
 
             const tx = db.transaction(["inventory", "product_master"], "readwrite");
-            const invStore = tx.objectStore("inventory");
-            const mstStore = tx.objectStore("product_master");
-
             for(let i=0; i<qty; i++) {
-                invStore.add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
+                tx.objectStore("inventory").add({ barcode, name, expiry, photo, date: new Date().toLocaleDateString() });
             }
-            mstStore.put({ barcode, name, photo });
+            tx.objectStore("product_master").put({ barcode, name, photo });
 
             tx.oncomplete = () => {
                 Swal.fire(t.success, t.saved, 'success');
@@ -289,113 +302,14 @@
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
         }
 
-        // MENU DE HERRAMIENTAS
-        function showToolsMenu() {
-            const t = i18n[currentLang];
-            Swal.fire({
-                title: t.toolsTitle,
-                showConfirmButton: false,
-                html: `
-                    <button class="btn-main" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> ${t.expExcel}</button>
-                    <button class="btn-main" onclick="document.getElementById('import-excel-input').click(); Swal.close();"><i class="fas fa-upload"></i> ${t.impExcel}</button>
-                    <button class="btn-main" style="background:#607d8b" onclick="generatePDF()"><i class="fas fa-file-pdf"></i> ${t.genPdf}</button>
-                `
-            });
-        }
-
-        // EXCEL EXPORT / IMPORT
-        function exportToExcel() {
-            const tx = db.transaction("inventory", "readonly");
-            tx.objectStore("inventory").getAll().onsuccess = e => {
-                const data = e.target.result.map(i => ({
-                    "Producto": i.name,
-                    "Código": i.barcode,
-                    "Vencimiento": i.expiry,
-                    "Fecha Compra": i.date,
-                    "Foto_Base64": i.photo
-                }));
-                const ws = XLSX.utils.json_to_sheet(data);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-                XLSX.writeFile(wb, "Inventario_Despensa.xlsx");
-            };
-        }
-
-        function importFromExcel(event) {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            reader.onload = e => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                
-                const tx = db.transaction(["inventory", "product_master"], "readwrite");
-                json.forEach(row => {
-                    const item = {
-                        name: row["Producto"],
-                        barcode: row["Código"] || "",
-                        expiry: row["Vencimiento"],
-                        date: row["Fecha Compra"],
-                        photo: row["Foto_Base64"] || PLACEHOLDER
-                    };
-                    tx.objectStore("inventory").add(item);
-                    tx.objectStore("product_master").put({barcode: item.barcode, name: item.name, photo: item.photo});
-                });
-                tx.oncomplete = () => { Swal.fire("Importado", "", "success"); renderInventory(); };
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // PDF REPORT
-        async function generatePDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const t = i18n[currentLang];
-            const today = new Date().setHours(0,0,0,0);
-
-            doc.setFontSize(18);
-            doc.text(t.appTitle, 14, 20);
-            doc.setFontSize(10);
-            doc.text("Reporte generado el: " + new Date().toLocaleString(), 14, 28);
-
-            const tx = db.transaction("inventory", "readonly");
-            tx.objectStore("inventory").getAll().onsuccess = e => {
-                const items = e.target.result.sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
-                const body = items.map(i => {
-                    const isExpired = new Date(i.expiry) < today;
-                    return [
-                        i.name,
-                        i.barcode,
-                        i.expiry,
-                        i.date,
-                        isExpired ? "VENCIDO" : "OK"
-                    ];
-                });
-
-                doc.autoTable({
-                    startY: 35,
-                    head: [['Producto', 'Código', 'Vencimiento', 'Compra', 'Estado']],
-                    body: body,
-                    didParseCell: function(data) {
-                        if (data.row.raw && data.row.raw[4] === "VENCIDO") {
-                            data.cell.styles.textColor = [211, 47, 47];
-                            data.cell.styles.fontStyle = 'bold';
-                        }
-                    }
-                });
-
-                doc.save("Reporte_Despensa.pdf");
-            };
-        }
-
-        // RENDER INVENTORY
         function renderInventory() {
             const list = document.getElementById('inventory-list');
             list.innerHTML = ""; if (!db) return;
             const t = i18n[currentLang];
             const products = {};
 
-            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
+            const tx = db.transaction("inventory", "readonly");
+            tx.objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
                     const item = c.value;
@@ -417,19 +331,14 @@
                             if (diff < 0) style = "alert-vencido";
                             else if (diff <= 3) style = "alert-3dias";
                             else if (diff <= 5) style = "alert-5dias";
-
                             submenu += `<button class="date-btn ${style}" onclick="openDetail('${p.name}', '${key}', '${date}')">
                                 <span>${date}</span><b>${count} ${t.units}</b></button>`;
                         }
-                        list.innerHTML += `
-                            <div class="card">
-                                <div class="card-header" onclick="toggleSubmenu('${key}')">
-                                    <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
-                                    <div><strong>${p.name}</strong></div>
-                                    <span class="badge-count">${total}</span>
-                                </div>
-                                <div id="submenu-${key}" class="submenu-dates">${submenu}</div>
-                            </div>`;
+                        list.innerHTML += `<div class="card">
+                            <div class="card-header" onclick="toggleSubmenu('${key}')">
+                                <img src="${p.photo}" style="width:50px; height:50px; object-fit:cover; border-radius:8px; background:#eee;">
+                                <div><strong>${p.name}</strong></div><span class="badge-count">${total}</span>
+                            </div><div id="submenu-${key}" class="submenu-dates">${submenu}</div></div>`;
                     }
                 }
             };
@@ -453,15 +362,10 @@
                     document.getElementById('detail-content').innerHTML = `
                         <img src="${p.photo}" style="width:100%; border-radius:10px; max-height:300px; object-fit:contain;">
                         <h2>${p.name}</h2>
-                        <p><b>${t.units}:</b> ${count}</p>
+                        <p><b>${t.available}:</b> ${count}</p>
                         <p><b>${t.details.expiry}:</b> ${p.expiry}</p>
-                        <div class="qty-row">
-                            <span>Eliminar:</span>
-                            <input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;">
-                        </div>
-                        <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">
-                            ${t.details.delete}
-                        </button>`;
+                        <div class="qty-row"><span>Eliminar:</span><input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;"></div>
+                        <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name}', '${barcode}', '${expiry}')">${t.details.delete}</button>`;
                     showView('detail');
                 }
             };
@@ -488,20 +392,30 @@
             const list = document.getElementById('alerts-list'); list.innerHTML = "";
             const t = i18n[currentLang];
             const today = new Date().setHours(0,0,0,0);
-            db.transaction("inventory").objectStore("inventory").openCursor().onsuccess = e => {
+            const tx = db.transaction("inventory", "readonly");
+            const alertData = {};
+
+            tx.objectStore("inventory").openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c) {
                     const p = c.value;
                     const diff = Math.ceil((new Date(p.expiry) - today) / (1000 * 60 * 60 * 24));
-                    let style = ""; let txt = "";
-                    if (diff < 0) { style = "alert-vencido"; txt = t.expired; }
-                    else if (diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
-                    else if (diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
-                    if (style) {
-                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${p.name}', '${p.barcode}', '${p.expiry}')">
-                            <b>${txt}</b><br><span>${p.name}</span><br><small>${p.expiry}</small></div>`;
+                    if (diff <= 5) {
+                        const key = p.name + p.expiry;
+                        if (!alertData[key]) alertData[key] = { ...p, count: 0, diff };
+                        alertData[key].count++;
                     }
                     c.continue();
+                } else {
+                    for (const key in alertData) {
+                        const a = alertData[key];
+                        let style = ""; let txt = "";
+                        if (a.diff < 0) { style = "alert-vencido"; txt = t.expired; }
+                        else if (a.diff <= 3) { style = "alert-3dias"; txt = t.expires3; }
+                        else if (a.diff <= 5) { style = "alert-5dias"; txt = t.expires5; }
+                        list.innerHTML += `<div class="card alert-item ${style}" onclick="openDetail('${a.name}', '${a.barcode}', '${a.expiry}')">
+                            <b>${txt} (${a.count} ${t.units})</b><br><span>${a.name}</span><br><small>${a.expiry}</small></div>`;
+                    }
                 }
             };
         }
@@ -516,13 +430,64 @@
             if(id === 'alerts') checkAlerts();
         }
 
+        function showToolsMenu() {
+            const t = i18n[currentLang];
+            Swal.fire({
+                title: t.toolsTitle, showConfirmButton: false,
+                html: `
+                    <button class="btn-main" onclick="exportToExcel()"><i class="fas fa-file-excel"></i> ${t.expExcel}</button>
+                    <button class="btn-main" onclick="document.getElementById('import-excel-input').click(); Swal.close();"><i class="fas fa-upload"></i> ${t.impExcel}</button>
+                    <button class="btn-main" style="background:#607d8b" onclick="generatePDF()"><i class="fas fa-file-pdf"></i> ${t.genPdf}</button>`
+            });
+        }
+
+        function exportToExcel() {
+            const tx = db.transaction("inventory", "readonly");
+            tx.objectStore("inventory").getAll().onsuccess = e => {
+                const data = e.target.result.map(i => ({ "Producto": i.name, "Código": i.barcode, "Vencimiento": i.expiry, "Fecha Compra": i.date, "Foto_Base64": i.photo }));
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+                XLSX.writeFile(wb, "Inventario_Despensa.xlsx");
+            };
+        }
+
+        function importFromExcel(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = e => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                const tx = db.transaction(["inventory", "product_master"], "readwrite");
+                json.forEach(row => {
+                    const item = { name: row["Producto"], barcode: row["Código"] || "", expiry: row["Vencimiento"], date: row["Fecha Compra"], photo: row["Foto_Base64"] || PLACEHOLDER };
+                    tx.objectStore("inventory").add(item);
+                    tx.objectStore("product_master").put({barcode: item.barcode, name: item.name, photo: item.photo});
+                });
+                tx.oncomplete = () => { Swal.fire("Importado", "", "success"); renderInventory(); };
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const t = i18n[currentLang];
+            const today = new Date().setHours(0,0,0,0);
+            doc.text(t.appTitle, 14, 20);
+            const tx = db.transaction("inventory", "readonly");
+            tx.objectStore("inventory").getAll().onsuccess = e => {
+                const body = e.target.result.sort((a,b) => new Date(a.expiry)-new Date(b.expiry)).map(i => [i.name, i.barcode, i.expiry, i.date, new Date(i.expiry)<today ? "VENCIDO" : "OK"]);
+                doc.autoTable({ startY: 30, head: [['Producto', 'Código', 'Vencimiento', 'Compra', 'Estado']], body: body });
+                doc.save("Reporte_Despensa.pdf");
+            };
+        }
+
         async function fetchProductInfo(barcode) {
             document.getElementById('api-loading').style.display = 'block';
             const tx = db.transaction("product_master", "readonly");
-            const local = await new Promise(r => { 
-                const g = tx.objectStore("product_master").get(barcode); 
-                g.onsuccess = () => r(g.result); 
-            });
+            const local = await new Promise(r => { const g = tx.objectStore("product_master").get(barcode); g.onsuccess = () => r(g.result); });
             if (local) {
                 document.getElementById('notes').value = local.name;
                 document.getElementById('current-photo-preview').src = local.photo;
@@ -534,7 +499,10 @@
                 const d = await res.json();
                 if (d.status === 1) {
                     document.getElementById('notes').value = d.product.product_name || "";
-                    if(d.product.image_url) document.getElementById('current-photo-preview').src = d.product.image_url;
+                    if(d.product.image_url) {
+                        const comp = await compressImage(d.product.image_url);
+                        document.getElementById('current-photo-preview').src = comp;
+                    }
                 }
             } catch(e) {}
             document.getElementById('api-loading').style.display = 'none';
