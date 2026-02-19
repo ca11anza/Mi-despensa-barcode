@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Despensa Pro v17 - Excel Fixed & Photo Update</title>
+    <title>Despensa Pro v18 - Android Back Support</title>
     <link rel="manifest" href="manifest.json">
     
     <!-- Librerías -->
@@ -19,6 +19,7 @@
         :root { --primary: #2e7d32; --bg: #f8f9fa; --danger: #d32f2f; --info: #0277bd; --warning-5d: #fdd835; --warning-3d: #fb8c00; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); padding-bottom: 80px; overscroll-behavior: contain; }
         .app-bar { background: var(--primary); color: white; padding: 10px 15px; text-align: center; font-weight: bold; position: sticky; top:0; z-index:100; display: flex; justify-content: space-between; align-items: center; height: 50px; }
+        .lang-select { background: rgba(255,255,255,0.2); color: white; border: 1px solid white; border-radius: 5px; padding: 3px; font-size: 0.8rem; outline: none; }
         .view { display: none; padding: 15px; animation: fadeIn 0.2s; }
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -32,7 +33,6 @@
         .date-btn { background: #f0f0f0; border: none; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem; cursor: pointer; border-left: 5px solid #ccc; }
         .btn-main { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1rem; margin-top: 10px; font-weight: bold; cursor: pointer; }
         
-        /* Foto en Detalle con botón flotante */
         .detail-photo-container { position: relative; width: 100%; text-align: center; }
         .detail-img { width: 100%; border-radius: 10px; max-height: 300px; object-fit: contain; background: #eee; }
         .btn-retake { position: absolute; bottom: 10px; right: 10px; background: var(--info); color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -50,7 +50,6 @@
         #api-loading { display: none; text-align: center; color: var(--primary); padding: 5px; font-size: 0.8rem; }
         .qty-row { display: flex; align-items: center; gap: 10px; background: #e8f5e9; padding: 10px; border-radius: 10px; margin-top: 10px; }
         
-        /* Alertas */
         .alert-item { cursor: pointer; border-radius: 12px; border-left: 8px solid #ccc; margin-bottom: 10px; }
         .alert-vencido { border-left-color: var(--danger) !important; background: #ffebee !important; }
         .alert-3dias { border-left-color: var(--warning-3d) !important; background: #fff3e0 !important; }
@@ -68,12 +67,13 @@
         <i class="fas fa-cog" onclick="showToolsMenu()" style="cursor:pointer; font-size: 1.3rem;"></i>
     </div>
 
-    <!-- VISTAS -->
+    <!-- BODEGA -->
     <section id="view-home" class="view active">
         <h3 id="txt-inventory-title">Mi Inventario</h3>
         <div id="inventory-list"></div>
     </section>
 
+    <!-- AGREGAR -->
     <section id="view-add" class="view">
         <div class="card">
             <h3 id="txt-add-title">Registrar Compra</h3>
@@ -107,15 +107,16 @@
         </div>
     </section>
 
+    <!-- ALERTAS -->
     <section id="view-alerts" class="view">
         <h3 id="txt-alerts-title">Alertas de Vencimiento</h3>
         <div id="alerts-list"></div>
     </section>
 
+    <!-- DETALLE -->
     <section id="view-detail" class="view">
-        <button onclick="showView('home')" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> <span id="txt-back">VOLVER</span></button>
+        <button onclick="history.back()" style="border:none; background:none; color:var(--primary); font-weight:bold; padding:10px 0;"><i class="fas fa-arrow-left"></i> <span id="txt-back">VOLVER</span></button>
         <div id="detail-content" class="card"></div>
-        <!-- Input oculto para actualizar foto desde detalle -->
         <input type="file" id="retake-photo-input" accept="image/*" capture="environment" style="display:none;">
     </section>
 
@@ -124,7 +125,7 @@
 
     <div id="scanner-container">
         <div id="reader"></div>
-        <button onclick="stopScanner()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CANCELAR</button>
+        <button onclick="history.back()" style="width:100%; padding:20px; background:var(--danger); color:white; border:none; font-weight:bold;">CANCELAR</button>
     </div>
 
     <nav class="bottom-nav">
@@ -197,6 +198,21 @@
         window.onload = () => {
             document.getElementById('current-photo-preview').src = PLACEHOLDER;
             applyLanguage(); initDB();
+            // Estado inicial del historial
+            history.replaceState({ view: 'home' }, "");
+        };
+
+        // --- MANEJO DEL BOTÓN ATRÁS DE ANDROID ---
+        window.onpopstate = function(event) {
+            if (event.state && event.state.view) {
+                // Si el usuario vuelve atrás, mostramos la vista sin empujar historial nuevo
+                realShowView(event.state.view, false);
+                if (event.state.view !== 'scanner') {
+                    stopScannerSilently();
+                }
+            } else {
+                realShowView('home', false);
+            }
         };
 
         function initDB() {
@@ -209,7 +225,6 @@
             };
         }
 
-        // --- COMPRESIÓN DE IMAGEN ---
         async function compressImage(base64Str) {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -226,7 +241,6 @@
             });
         }
 
-        // Eventos de Fotos
         document.getElementById('photo-input').addEventListener('change', async e => {
             const file = e.target.files[0];
             if (file) {
@@ -239,7 +253,6 @@
             }
         });
 
-        // --- RETOMA FOTO DESDE DETALLE ---
         let currentDetailItem = null;
         document.getElementById('retake-photo-input').addEventListener('change', async e => {
             const file = e.target.files[0];
@@ -249,23 +262,14 @@
                 reader.onload = async ev => {
                     const compressed = await compressImage(ev.target.result);
                     const tx = db.transaction(["inventory", "product_master"], "readwrite");
-                    
-                    // Actualizar memoria
-                    tx.objectStore("product_master").put({
-                        barcode: currentDetailItem.barcode || "",
-                        name: currentDetailItem.name,
-                        photo: compressed
-                    });
-
-                    // Actualizar todas las unidades del grupo en inventario
+                    tx.objectStore("product_master").put({ barcode: currentDetailItem.barcode || "", name: currentDetailItem.name, photo: compressed });
                     const store = tx.objectStore("inventory");
                     store.openCursor().onsuccess = event => {
                         const cursor = event.target.result;
                         if(cursor) {
                             const item = cursor.value;
                             if(item.name === currentDetailItem.name && (item.barcode || "") === (currentDetailItem.barcode || "") && item.expiry === currentDetailItem.expiry) {
-                                item.photo = compressed;
-                                cursor.update(item);
+                                item.photo = compressed; cursor.update(item);
                             }
                             cursor.continue();
                         } else {
@@ -278,7 +282,6 @@
             }
         });
 
-        // OCR
         document.getElementById('ocr-input').addEventListener('change', e => {
             const file = e.target.files[0];
             if (file) {
@@ -303,7 +306,7 @@
                 const m = text.match(r);
                 if (m) {
                     if (m.length === 3) return `${m[2].length === 2 ? "20"+m[2] : m[2]}-${m[1]}-01`;
-                    if (m.length === 4) return `${m[3].length === 2 ? "20"+m[3] : m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+                    if (m.length === 4) return `${m[3].length === 2 ? "20"+match[3] : match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
                 }
             }
             return null;
@@ -348,51 +351,23 @@
             };
         }
 
-        // --- EXCEL EXPORT (SIN FOTOS - AGRUPADO) ---
         function exportToExcel() {
-            if (!db) return;
-            Swal.fire({ title: 'Exportando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
             getGroupedData(products => {
                 const excelData = [];
                 for (const key in products) {
                     const p = products[key];
                     for (const date in p.dates) {
-                        excelData.push({
-                            "Producto": p.name,
-                            "Código": p.barcode || "",
-                            "Vencimiento": date,
-                            "Cantidad": p.dates[date].length,
-                            "Fecha Compra": p.dates[date][0].date
-                        });
+                        excelData.push({ "Producto": p.name, "Código": p.barcode || "", "Vencimiento": date, "Cantidad": p.dates[date].length, "Fecha Compra": p.dates[date][0].date });
                     }
                 }
-
-                try {
-                    const ws = XLSX.utils.json_to_sheet(excelData);
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-                    
-                    // Método de descarga robusto
-                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
-                    function s2ab(s) {
-                        const buf = new ArrayBuffer(s.length);
-                        const view = new Uint8Array(buf);
-                        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-                        return buf;
-                    }
-                    const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `Inventario_Despensa.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    Swal.close();
-                } catch (err) {
-                    Swal.fire('Error', 'Error al generar el archivo.', 'error');
-                }
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+                function s2ab(s) { const buf = new ArrayBuffer(s.length); const view = new Uint8Array(buf); for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF; return buf; }
+                const blob = new Blob([s2ab(wbout)], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `Inventario.xlsx`; a.click();
             });
         }
 
@@ -406,12 +381,11 @@
                 const tx = db.transaction(["inventory", "product_master"], "readwrite");
                 json.forEach(row => {
                     const qty = parseInt(row["Cantidad"]) || 1;
-                    const barcode = String(row["Código"] || "").trim();
-                    const item = { name: row["Producto"], barcode: barcode, expiry: row["Vencimiento"], date: row["Fecha Compra"] || new Date().toLocaleDateString(), photo: PLACEHOLDER };
+                    const item = { name: row["Producto"], barcode: String(row["Código"] || ""), expiry: row["Vencimiento"], date: row["Fecha Compra"] || new Date().toLocaleDateString(), photo: PLACEHOLDER };
                     for(let i=0; i<qty; i++) { tx.objectStore("inventory").add({...item}); }
-                    if(barcode && barcode !== "") silentFetchPhoto(barcode);
+                    if(item.barcode) silentFetchPhoto(item.barcode);
                 });
-                tx.oncomplete = () => { Swal.fire("Importado", "Recuperando fotos...", "success"); renderInventory(); };
+                tx.oncomplete = () => renderInventory();
             };
             reader.readAsArrayBuffer(file);
         }
@@ -421,19 +395,9 @@
                 const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
                 const d = await res.json();
                 if (d.status === 1 && d.product.image_url) {
-                    const photoUrl = d.product.image_url;
                     const tx = db.transaction(["inventory", "product_master"], "readwrite");
-                    tx.objectStore("product_master").put({ barcode: barcode, name: d.product.product_name || "P", photo: photoUrl });
-                    const store = tx.objectStore("inventory");
-                    store.openCursor().onsuccess = e => {
-                        const cursor = e.target.result;
-                        if(cursor) {
-                            if(cursor.value.barcode === barcode && cursor.value.photo === PLACEHOLDER) {
-                                const data = cursor.value; data.photo = photoUrl; cursor.update(data);
-                            }
-                            cursor.continue();
-                        } else { renderInventory(); }
-                    };
+                    tx.objectStore("product_master").put({ barcode, name: d.product.product_name, photo: d.product.image_url });
+                    renderInventory();
                 }
             } catch(e) {}
         }
@@ -467,6 +431,27 @@
 
         function toggleSubmenu(id) { const el = document.getElementById(`submenu-${id}`); if(el) el.classList.toggle('active'); }
 
+        // --- NAVEGACIÓN MEJORADA ---
+        function showView(viewId) {
+            // Cuando navegamos manualmente (clic en botones de abajo)
+            history.pushState({ view: viewId }, "", "#" + viewId);
+            realShowView(viewId, true);
+        }
+
+        function realShowView(viewId, isNavButtonClick) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
+            
+            const el = document.getElementById('view-' + viewId);
+            if(el) el.classList.add('active');
+
+            const idx = {home:0, add:1, alerts:2};
+            if(viewId in idx) document.querySelectorAll('.nav-item')[idx[viewId]].classList.add('active');
+
+            if(viewId === 'home') renderInventory();
+            if(viewId === 'alerts') checkAlerts();
+        }
+
         function openDetail(name, barcode, expiry) {
             const t = i18n[currentLang];
             const tx = db.transaction("inventory", "readonly");
@@ -479,17 +464,16 @@
                     c.continue();
                 } else {
                     const p = matches[0]; const count = matches.length;
-                    currentDetailItem = p; // Guardar referencia para retomar foto
+                    currentDetailItem = p;
                     document.getElementById('detail-content').innerHTML = `
                         <div class="detail-photo-container">
-                            <img src="${p.photo}" class="detail-img" id="detail-preview">
+                            <img src="${p.photo}" class="detail-img">
                             <button class="btn-retake" onclick="document.getElementById('retake-photo-input').click()"><i class="fas fa-camera"></i></button>
                         </div>
-                        <h2>${p.name}</h2>
-                        <p><b>${t.available}:</b> ${count}</p>
-                        <p><b>${t.details.expiry}:</b> ${p.expiry}</p>
+                        <h2>${p.name}</h2><p><b>${t.available}:</b> ${count}</p><p><b>${t.details.expiry}:</b> ${p.expiry}</p>
                         <div class="qty-row"><span>${t.removeQty}:</span><input type="number" id="deleteQty" value="1" min="1" max="${count}" style="width:60px;"></div>
                         <button class="btn-main" style="background:var(--danger)" onclick="deleteMultiple('${name.replace(/'/g, "\\'")}', '${barcode}', '${expiry}')">${t.details.delete}</button>`;
+                    // Usamos showView pero forzando historial para que "Atrás" funcione desde el detalle
                     showView('detail');
                 }
             };
@@ -503,10 +487,9 @@
             store.openCursor().onsuccess = e => {
                 const c = e.target.result;
                 if (c && del < qty) {
-                    const i = c.value;
-                    if (i.name === name && (i.barcode || "") === barcode && i.expiry === expiry) { store.delete(c.key); del++; }
+                    if (c.value.name === name && (c.value.barcode || "") === barcode && c.value.expiry === expiry) { store.delete(c.key); del++; }
                     c.continue();
-                } else { showView('home'); }
+                } else { history.back(); } // Volver atrás automáticamente tras borrar
             };
         }
 
@@ -532,16 +515,6 @@
             });
         }
 
-        function showView(id) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
-            document.getElementById('view-' + id).classList.add('active');
-            const idx = {home:0, add:1, alerts:2};
-            if(id in idx) document.querySelectorAll('.nav-item')[idx[id]].classList.add('active');
-            if(id === 'home') renderInventory();
-            if(id === 'alerts') checkAlerts();
-        }
-
         function showToolsMenu() {
             const t = i18n[currentLang];
             Swal.fire({
@@ -554,28 +527,15 @@
 
         async function generatePDF() {
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const t = i18n[currentLang];
-            const today = new Date().setHours(0,0,0,0);
+            const doc = new jsPDF(); const t = i18n[currentLang]; const today = new Date().setHours(0,0,0,0);
             getGroupedData(products => {
                 const finalData = [];
-                for (const key in products) {
-                    const p = products[key];
-                    for (const date in p.dates) {
-                        finalData.push({ ...p, expiry: date, qty: p.dates[date].length });
-                    }
-                }
-                finalData.sort((a,b) => {
-                    const isAExp = new Date(a.expiry) < today; const isBExp = new Date(b.expiry) < today;
-                    if(isAExp && !isBExp) return -1; if(!isAExp && isBExp) return 1;
-                    return new Date(a.expiry) - new Date(b.expiry);
-                });
+                for (const k in products) { for (const d in products[k].dates) { finalData.push({ ...products[k], expiry: d, qty: products[k].dates[d].length }); } }
+                finalData.sort((a,b) => (new Date(a.expiry)<today) ? -1 : 1);
                 const body = finalData.map(i => [i.name, i.barcode || "-", i.expiry, i.qty, new Date(i.expiry) < today ? t.pdf.expired : t.pdf.ok]);
                 doc.text(t.pdf.title, 14, 20);
-                doc.autoTable({ startY: 30, head: [[t.pdf.product, t.pdf.barcode, t.pdf.expiry, t.pdf.qty, t.pdf.status]], body: body, headStyles: { fillColor: [46, 125, 50] },
-                    didParseCell: function(data) { if (data.row.raw && data.row.raw[4] === t.pdf.expired) { data.cell.styles.textColor = [211, 47, 47]; data.cell.styles.fillColor = [255, 235, 238]; } }
-                });
-                doc.save("Reporte_Despensa.pdf");
+                doc.autoTable({ startY: 30, head: [[t.pdf.product, t.pdf.barcode, t.pdf.expiry, t.pdf.qty, t.pdf.status]], body: body, headStyles: { fillColor: [46, 125, 50] } });
+                doc.save("Reporte.pdf");
             });
         }
 
@@ -603,10 +563,20 @@
 
         function startScanner() {
             document.getElementById('scanner-container').style.display='block';
+            // Empujamos estado al historial para que "Atrás" cierre el escáner
+            history.pushState({ view: 'scanner' }, "", "#scanner");
             html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, 
-                t => { document.getElementById('barcode').value = t; stopScanner(); fetchProductInfo(t); });
+                t => { document.getElementById('barcode').value = t; history.back(); fetchProductInfo(t); });
         }
-        function stopScanner() { html5QrCode.stop(); document.getElementById('scanner-container').style.display='none'; }
+
+        function stopScannerSilently() {
+            html5QrCode.stop().catch(() => {});
+            document.getElementById('scanner-container').style.display='none';
+        }
+
+        function stopScanner() {
+            stopScannerSilently();
+        }
     </script>
 </body>
 </html>
